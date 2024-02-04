@@ -12,3 +12,4 @@ wget            # Recommended.
 vim             # Recommended.
 tmux            # Recommended.
 tree            # Recommended.
+gcc
