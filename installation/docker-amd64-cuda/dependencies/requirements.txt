@@ -3,9 +3,9 @@ tqdm
 wandb
 pre-commit
 black
-einops==0.6.1
-matplotlib==3.4.3
-networkx==2.6.3
-numpy==1.20.3
+einops
+matplotlib
+networkx
+numpy
 dgl
 
