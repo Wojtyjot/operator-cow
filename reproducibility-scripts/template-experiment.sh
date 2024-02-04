@@ -1,1 +1,1 @@
-exec python -m Operator-cow.template_experiment
+exec python -m operator-cow.template_experiment

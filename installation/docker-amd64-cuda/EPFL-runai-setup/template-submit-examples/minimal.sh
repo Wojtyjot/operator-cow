@@ -1,9 +1,9 @@
 runai submit \
   --name example-minimal \
   --interactive \
-  --image registry.rcp.epfl.ch/claire/moalla/Operator-cow:run-latest-moalla \
+  --image registry.rcp.epfl.ch/claire/moalla/operator-cow:run-latest-moalla \
   --pvc runai-claire-moalla-scratch:/claire-rcp-scratch \
-  -e PROJECT_ROOT_AT=/claire-rcp-scratch/home/moalla/Operator-cow/dev \
+  -e PROJECT_ROOT_AT=/claire-rcp-scratch/home/moalla/operator-cow/dev \
   -- sleep infinity
 
 ## Notes:

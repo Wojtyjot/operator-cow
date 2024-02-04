@@ -1,7 +1,7 @@
 # Run `wandb sweep reproducibility-scripts/template-sweep.yaml` to generate a sweep.
 # Run `wandb agent template-sweep-id` to run the sweep.
 
-project: Operator-cow
+project: operator-cow
 name: template-sweep
 method: grid
 metric:
@@ -18,5 +18,5 @@ parameters:
 command:
   - python
   - "-m"
-  - "Operator-cow.template_experiment"
+  - "operator-cow.template_experiment"
   - ${args_no_hyphens}

@@ -129,16 +129,16 @@ forwards your ssh keys, and allows you to clone your repository on the container
    to have the latest state of your repo.)
    ```bash
    # Somewhere in your PVC, say your personal directory there.
-   mkdir Operator-cow
-   git clone <repo-url> Operator-cow/dev
-   git clone <repo-url> Operator-cow/run
+   mkdir operator-cow
+   git clone <repo-url> operator-cow/dev
+   git clone <repo-url> operator-cow/run
    ```
 
    We also recommend that you make Git ignore the executable bit as the repo is moved across filesystems.
    You can do so by running `git config core.filemode false` in both repositories.
 
    ```bash
-   cd Operator-cow/dev && git config core.filemode false
+   cd operator-cow/dev && git config core.filemode false
    cd ../run && git config core.filemode false
    ```
 
@@ -171,19 +171,19 @@ You should expect to see something like:
 $ runai logs example-minimal
 ...
 [TEMPLATE INFO] Running entrypoint.sh
-[TEMPLATE INFO] PROJECT_ROOT_AT is set to /claire-rcp-scratch/home/moalla/Operator-cow/dev.
-[TEMPLATE INFO] The next commands (and all interactive shells) will be run from /claire-rcp-scratch/home/moalla/Operator-cow/dev.
+[TEMPLATE INFO] PROJECT_ROOT_AT is set to /claire-rcp-scratch/home/moalla/operator-cow/dev.
+[TEMPLATE INFO] The next commands (and all interactive shells) will be run from /claire-rcp-scratch/home/moalla/operator-cow/dev.
 [TEMPLATE INFO] Installing the project with pip.
-[TEMPLATE INFO] Expecting /claire-rcp-scratch/home/moalla/Operator-cow/dev to be a Python project.
+[TEMPLATE INFO] Expecting /claire-rcp-scratch/home/moalla/operator-cow/dev to be a Python project.
 [TEMPLATE INFO] To skip this installation use the env variable SKIP_INSTALL_PROJECT=1.
 ...
-Obtaining file:///claire-rcp-scratch/home/moalla/Operator-cow/dev
+Obtaining file:///claire-rcp-scratch/home/moalla/operator-cow/dev
 ...
-Building wheels for collected packages: Operator-cow
+Building wheels for collected packages: operator-cow
 ...
-Successfully built Operator-cow
-Installing collected packages: Operator-cow
-Successfully installed Operator-cow-0.0.1
+Successfully built operator-cow
+Installing collected packages: operator-cow
+Successfully installed operator-cow-0.0.1
 ...
 [TEMPLATE INFO] Testing that the package can be imported.
 [TEMPLATE INFO] Package imported successfully.
@@ -370,7 +370,7 @@ You can put this directory in a place where you keep the remote development tool
 (You can use the `minimal.sh` example to access your PVC.)
 
 ```
-/claire-rcp-scrach/home/moalla/Operator-cow
+/claire-rcp-scrach/home/moalla/operator-cow
 ├── ...               # Other remote development tools.
 └── jetbrains-config  # To contain the IDE .vscode-server for the project.
 ```
@@ -406,7 +406,7 @@ You can find an example in `submit-scripts/remote_development.sh`.
    The link looks like:
 
    ```bash
-    Gateway link: jetbrains-gateway://connect#idePath=%2Fclaire-rcp-scratch%2Fhome%2Fmoalla%2Fremote-development%2Fpycharm&projectPath=%2Fclaire-rcp-scratch%2Fhome%2Fmoalla%2FOperator-cow%2Fdev&host=127.0.0.1&port=2222&user=moalla&type=ssh&deploy=false&newUi=true
+    Gateway link: jetbrains-gateway://connect#idePath=%2Fclaire-rcp-scratch%2Fhome%2Fmoalla%2Fremote-development%2Fpycharm&projectPath=%2Fclaire-rcp-scratch%2Fhome%2Fmoalla%2Foperator-cow%2Fdev&host=127.0.0.1&port=2222&user=moalla&type=ssh&deploy=false&newUi=true
     ```
 2. Enable port forwarding for the SSH port.
 3. Use the Gateway link to connect to the remote IDE from a local JetBrains Gateway client as
