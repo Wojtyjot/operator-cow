@@ -7,8 +7,7 @@ from pathlib import Path
 import hydra
 import wandb
 from omegaconf import DictConfig, OmegaConf
-
-from operator-cow import utils
+from utils import utils
 
 # Hydra sets up the logger automatically.
 # https://hydra.cc/docs/tutorials/basic/running_your_app/logging/

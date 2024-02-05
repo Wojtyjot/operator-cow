@@ -1,15 +1,24 @@
+import dgl
 import torch.nn as nn
 import torch.nn.functional as F
 
-import dgl
+ACTIVATION = {
+    "gelu": nn.GELU(),
+    "tanh": nn.Tanh(),
+    "sigmoid": nn.Sigmoid(),
+    "relu": nn.ReLU(),
+    "leaky_relu": nn.LeakyReLU(0.1),
+    "softplus": nn.Softplus(),
+    "ELU": nn.ELU(),
+}
 
-ACTIVATION = {'gelu':nn.GELU(),'tanh':nn.Tanh(),'sigmoid':nn.Sigmoid(),'relu':nn.ReLU(),'leaky_relu':nn.LeakyReLU(0.1),'softplus':nn.Softplus(),'ELU':nn.ELU()}
-
-'''
+"""
     A simple MLP class, includes at least 2 layers and n hidden layers
-'''
+"""
+
+
 class MLP(nn.Module):
-    def __init__(self, n_input, n_hidden, n_output, n_layers=1, act='gelu'):
+    def __init__(self, n_input, n_hidden, n_output, n_layers=1, act="gelu"):
         super(MLP, self).__init__()
 
         if act in ACTIVATION.keys():
@@ -22,11 +31,11 @@ class MLP(nn.Module):
         self.n_layers = n_layers
         self.linear_pre = nn.Linear(n_input, n_hidden)
         self.linear_post = nn.Linear(n_hidden, n_output)
-        self.linears = nn.ModuleList([nn.Linear(n_hidden, n_hidden) for _ in range(n_layers)])
+        self.linears = nn.ModuleList(
+            [nn.Linear(n_hidden, n_hidden) for _ in range(n_layers)]
+        )
 
         # self.bns = nn.ModuleList([nn.BatchNorm1d(n_hidden) for _ in range(n_layers)])
-
-
 
     def forward(self, x):
         x = self.act(self.linear_pre(x))
@@ -36,4 +45,3 @@ class MLP(nn.Module):
 
         x = self.linear_post(x)
         return x
-
