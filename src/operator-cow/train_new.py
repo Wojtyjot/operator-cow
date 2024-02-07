@@ -19,11 +19,12 @@ def train(
     metric_func: nn.Module,
     train_loader: MIODataLoader,
     val_loader: MIODataLoader,
-    optimizer: nn.optim.Optimizer,
-    lr_scheduler: nn.optim.lr_scheduler,
+    optimizer,
+    lr_scheduler,
     epochs: int,
     device: str,
     grad_clip: float,
+    normalizer_up,
     start_epoch: int = 0,
     print_freq: int = 20,
     model_save_path: str = "../../data/checkpoints/",
@@ -73,6 +74,7 @@ def train(
             metric_func=metric_func,
             valid_loader=val_loader,
             device=device,
+            normalizer_up=normalizer_up,
         )
         wandb.log({"val_L2_loss": val_result["metric"].mean()})
 
@@ -103,8 +105,8 @@ def train_batch(
     model: nn.Module,
     loss_func: nn.Module,
     data: list,
-    optimizer: nn.optim.Optimizer,
-    lr_scheduler: nn.optim.lr_scheduler,
+    optimizer,
+    lr_scheduler,
     device: str,
     grad_clip: float,
 ):
@@ -134,6 +136,7 @@ def validate_epoch(
     metric_func: nn.Module,
     valid_loader: MIODataLoader,
     device: str,
+    normalizer_up,
 ):
     model.eval()
     metric_val = []
@@ -149,7 +152,9 @@ def validate_epoch(
             _, _, metric = metric_func(g, y_pred, y)
 
             metric_val.append(metric)
-            artery = decode_artery(u_p[0:10].cpu().numpy())
+            # TRZEBA ZRENORMALIZOWAĆ !!!!!!!!!
+            u_p = normalizer_up.transform(u_p, inverse=True)
+            artery = decode_artery(u_p[0][:10])
 
             if artery not in plotted_vessels:
                 plot_predictions(y_pred.cpu().numpy(), y.cpu().numpy(), artery)

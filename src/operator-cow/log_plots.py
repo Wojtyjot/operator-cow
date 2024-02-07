@@ -12,7 +12,6 @@ def decode_artery(artery: np.ndarray) -> str:
     Function decodes artery one-hot vector to artery name
     """
     arteries = [
-        "VA",
         "ICA_1",
         "BA",
         "MCA",

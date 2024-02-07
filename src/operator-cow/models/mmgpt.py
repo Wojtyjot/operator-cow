@@ -9,7 +9,7 @@ from models.mlp import MLP
 from torch.nn import GELU, ReLU, Sigmoid, Tanh
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pad_sequence
-from utils import MultipleTensors
+from utils.utils import MultipleTensors
 
 
 class MoEGPTConfig:

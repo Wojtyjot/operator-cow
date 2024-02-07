@@ -12,12 +12,12 @@ from models.optimizer import AdamW
 from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
-from utils import utils
+from utils import seeding, utils
 
 logger = logging.getLogger(__name__)
 
 OmegaConf.register_new_resolver(
-    "generate_random_seed", utils.seeding.generate_random_seed, use_cache=True
+    "generate_random_seed", seeding.generate_random_seed, use_cache=True
 )
 
 
@@ -42,6 +42,7 @@ def main(config: DictConfig) -> None:
     torch.manual_seed(config.seed)
     # save normalizer to renormalize data for plotting and evaluation
     normalizer = dataset.y_normalizer.to(device)
+    normalizer_up = dataset.up_normalizer.to(device)
 
     train_loader = MIODataLoader(
         train_data,
@@ -144,6 +145,7 @@ def main(config: DictConfig) -> None:
         epochs=config.training.epochs,
         device=device,
         grad_clip=config.training.grad_clip,
+        normalizer_up=normalizer_up,
     )
 
 
