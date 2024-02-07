@@ -37,7 +37,7 @@ def train(
     best_val_metric = np.inf
 
     for epoch in range(epochs):
-        model.tarin()
+        model.train()
         torch.cuda.empty_cache()
 
         for batch in train_loader:
@@ -75,7 +75,7 @@ def train(
         wandb.log({"val_L2_loss": val_result["metric"].mean()})
 
         val_metric = val_result["metric"].sum()
-        loss_val.append(val_metric["metric"])
+        loss_val.append(val_metric)
 
         if val_metric < best_val_metric:
             best_val_metric = val_metric

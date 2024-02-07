@@ -16,6 +16,10 @@ from utils import utils
 
 logger = logging.getLogger(__name__)
 
+OmegaConf.register_new_resolver(
+    "generate_random_seed", utils.seeding.generate_random_seed, use_cache=True
+)
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="test_exp")
 def main(config: DictConfig) -> None:
@@ -33,8 +37,9 @@ def main(config: DictConfig) -> None:
 
     # Load the data
     dataset = COWDataset(config.data.path)
+    torch.manual_seed(2137)
     train_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
-
+    torch.manual_seed(config.seed)
     # save normalizer to renormalize data for plotting and evaluation
     normalizer = dataset.y_normalizer.to(device)
 
@@ -59,7 +64,6 @@ def main(config: DictConfig) -> None:
             branch_sizes=dataset.config["branch_sizes"],
             output_size=dataset.config["output_dim"],
             space_dim=2,
-            output_size=3,
             n_layers=config.model.n_layers,
             n_hidden=config.model.n_hidden,
             n_head=config.model.n_head,
@@ -80,7 +84,6 @@ def main(config: DictConfig) -> None:
             branch_sizes=dataset.config["branch_sizes"],
             output_size=dataset.config["output_dim"],
             space_dim=2,
-            output_size=3,
             n_layers=config.model.n_layers,
             n_hidden=config.model.n_hidden,
             n_head=config.model.n_head,
