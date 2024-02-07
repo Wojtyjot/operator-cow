@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader
+from log_plots import decode_artery, plot_predictions
 from models.optimizer import Adam
 from torch.optim.lr_scheduler import OneCycleLR
 from utils.utils import get_num_params
@@ -62,10 +63,11 @@ def train(
             it += 1
             log = f"epoch: [{epoch +1}/{epochs}]"
             log += f"loss: {loss[0]:.4f}"
-
+            print("breaking")
+            break
             if it % print_freq == 0:
                 print(log)
-
+        print("validation")
         val_result = validate_epoch(
             model=model,
             metric_func=metric_func,
@@ -135,6 +137,7 @@ def validate_epoch(
 ):
     model.eval()
     metric_val = []
+    plotted_vessels = []  # 10 arteries thetas [0:10]
     for _, data in enumerate(valid_loader):
         with torch.no_grad():
             g, u_p, g_u = data
@@ -146,4 +149,10 @@ def validate_epoch(
             _, _, metric = metric_func(g, y_pred, y)
 
             metric_val.append(metric)
+            artery = decode_artery(u_p[0:10].cpu().numpy())
+
+            if artery not in plotted_vessels:
+                plot_predictions(y_pred.cpu().numpy(), y.cpu().numpy(), artery)
+                plotted_vessels.append(artery)
+
     return dict(metric=np.mean(metric_val, axis=0))
