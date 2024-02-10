@@ -103,7 +103,7 @@ def main(config: DictConfig) -> None:
 
     # Put model on device
     model = model.to(device)
-
+    print(f"Number of rainable parameters = {utils.get_num_params(model)}")
     # Load optimizer
     optimizer = AdamW(
         params=model.parameters(),

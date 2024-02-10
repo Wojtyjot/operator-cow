@@ -12,6 +12,7 @@ def decode_artery(artery: np.ndarray) -> str:
     Function decodes artery one-hot vector to artery name
     """
     arteries = [
+        "VA",
         "ICA_1",
         "BA",
         "MCA",
@@ -25,6 +26,36 @@ def decode_artery(artery: np.ndarray) -> str:
     ]
     index = np.argmax(artery)
     return arteries[index]
+
+
+def encode_artery(artery: str) -> np.ndarray:
+    """
+    Function encodes artery type as one-hot vector
+
+    Parameters
+    ----------
+    artery : str
+        Artery type must be one of the following:
+        "VA", "ICA_1", "BA", "MCA", "ACA_A1", "ACA_A2",
+        "PCA_P1", "PCA_P2", "PCOA", "ACOA", "ICA_2"
+    """
+    arteries = [
+        "VA",
+        "ICA_1",
+        "BA",
+        "MCA",
+        "ACA_A1",
+        "ACA_A2",
+        "PCA_P1",
+        "PCA_P2",
+        "PCOA",
+        "ACOA",
+        "ICA_2",
+    ]
+    out = np.zeros(len(arteries))
+    index = arteries.index(artery)
+    out[index] = 1
+    return out
 
 
 def plot_predictions(

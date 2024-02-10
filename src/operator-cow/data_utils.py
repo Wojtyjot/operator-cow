@@ -7,6 +7,7 @@ import dgl
 import networkx as nx
 import numpy as np
 import torch
+import torch.nn as nn
 import tqdm
 from dgl.data import DGLDataset
 from dgl.nn.pytorch import AvgPooling, SumPooling
@@ -786,3 +787,158 @@ class COWDataset(DGLDataset):
 
     def __getitem__(self, idx):
         return self.graphs[idx], self.u_p[idx], self.inputs_f[idx]
+
+
+class COWDataset_GANO(DGLDataset):
+    """
+    Cllas for loading data for gano
+
+    in form [X,Y,theta,(in_funcs)]
+    whete X (Nt x 1) t0, ..., tn
+    Y (Nt x 1) solution to flow at inlet
+    theta same as in cow dataset or only artery
+    in_funcs (Nt x 2) grf sample concatenated with time
+    """
+
+    def __init__(
+        self,
+        data_path: str,
+        normalize_x: bool = True,
+        normalize_y: bool = True,
+        name: str = "COWDataset_GANO",
+    ):
+
+        self.data_path = data_path
+        self.normalize_x = normalize_x
+        self.normalize_y = normalize_y
+
+        if not os.path.exists(data_path):
+            raise FileNotFoundError(f"Data file {data_path} not found")
+        else:
+            self.data = np.load(data_path, allow_pickle=True)
+
+        super(COWDataset, self).__init__(name)
+
+    def process(self):
+
+        self.data_len = len(self.data)
+        self.graphs = list()
+        # self.inputs_f = list()
+        self.u_p = list()  # theta, global parameters
+        for i in range(len(self)):
+            _, _, u_p, input_f = self.data[i]
+            x = self.create_x()
+            y = self.get_y(input_f)
+            u_p = u_p[:10]  # take only artery encoded
+            g = dgl.DGLGraph()
+            g.add_nodes(x.shape[0])
+            g.ndata["x"] = torch.from_numpy(x).float()
+            g.ndata["y"] = torch.from_numpy(y).float()
+            up = torch.from_numpy(u_p).float()
+            self.graphs.append(g)
+            self.u_p.append(up)
+            # input_f = MultipleTensors([torch.from_numpy(f).float() for f in input_f])
+            # self.inputs_f.append(input_f)
+            # self.num_inputs = len(input_f)
+
+        self.u_p = torch.stack(self.u_p)
+
+        if self.normalize_y:
+            self.__normalize_y()
+        if self.normalize_x:
+            self.__normalize_x()
+
+        self.__update_dataset_config()
+
+        return
+
+    def create_x(self):
+        """
+        Create x from time
+        """
+        x = np.linspace(0, 1, 100)
+        x.reshape(-1, 1)
+        return x
+
+    def get_y(self, in_funcs):
+        """
+        Get y from in_funcs
+        """
+        y = in_funcs[0][1:]
+        return y
+
+    def __normalize_y(self):
+        print("Normalizing target features")
+        y_feats_all = torch.cat([g.ndata["y"] for g in self.graphs], dim=0)
+        self.y_normalizer = UnitTransformer(y_feats_all)
+        for g in self.graphs:
+            g.ndata["y"] = self.y_normalizer.transform(g.ndata["y"], inverse=False)
+        print("Target features are normalized using unit transformer")
+
+    def __normalize_x(self):
+        print("Normalizing input features")
+        x_feats_all = torch.cat([g.ndata["x"] for g in self.graphs], dim=0)
+        self.x_normalizer = UnitTransformer(x_feats_all)
+        for g in self.graphs:
+            g.ndata["x"] = self.x_normalizer.transform(g.ndata["x"], inverse=False)
+        self.up_normalizer = UnitTransformer(self.u_p)
+        self.u_p = self.up_normalizer.transform(self.u_p, inverse=False)
+        print("Input features are normalized using unit transformer")
+
+    def __update_dataset_config(self):
+        self.config = {
+            "input_dim": self.graphs[0].ndata["x"].shape[1],
+            "theta_dim": self.u_p.shape[1],
+            "output_dim": self.graphs[0].ndata["y"].shape[1],
+            "branch_sizes": [2],  # grf sample concatenated with time hardocoded
+        }
+        return
+
+    def __len__(self):
+        return self.data_len
+
+    def __getitem__(self, idx):
+        return self.graphs[idx], self.u_p[idx]
+
+
+def calculate_gradient_penalty(
+    Discriminator: nn.Module,
+    real_function: torch.Tensor,
+    fake_function: torch.Tensor,
+    device: str,
+    g: dgl.DGLGraph,
+    u_p: torch.Tensor,
+    t: torch.Tensor,
+) -> torch.Tensor:
+    """
+
+    Calculates the gradient penalty loss for GAN
+
+    """
+    # Random weight term for interpolation between real and fake data
+    # take out t from real_function
+    real_function = real_function[:, :, 1:]
+    alpha = torch.randn((real_function.size(0), 1, 1), device=device)
+    # Get random interpolation between real and fake data
+    interpolates = (
+        alpha * real_function + ((1 - alpha) * fake_function)
+    ).requires_grad_(True)
+
+    interpolates = torch.cat((t, interpolates), dim=-1)
+    model_interpolates = Discriminator(g, u_p, interpolates)
+    grad_outputs = torch.ones(
+        model_interpolates.size(), device=device, requires_grad=False
+    )
+
+    # Get gradient w.r.t. interpolates
+    gradients = torch.autograd.grad(
+        outputs=model_interpolates,
+        inputs=interpolates,
+        grad_outputs=grad_outputs,
+        create_graph=True,
+        retain_graph=True,
+        only_inputs=True,
+    )[0]
+    gradients = gradients.reshape(gradients.size(0), -1)
+    gradient_penalty = torch.mean((gradients.norm(2, dim=1) - 1.0 / 100) ** 2)
+    return gradient_penalty

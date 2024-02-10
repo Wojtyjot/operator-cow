@@ -413,3 +413,137 @@ class GNOT(nn.Module):
             [x[i, :num] for i, num in enumerate(g.batch_num_nodes())], dim=0
         )
         return x_out
+
+
+def kernel(in_chan=2, up_dim=32):
+    """
+    Kernel network apply on grid
+    """
+    layers = nn.Sequential(
+        nn.Linear(in_chan, up_dim, bias=True),
+        torch.nn.GELU(),
+        nn.Linear(up_dim, up_dim, bias=True),
+        torch.nn.GELU(),
+        nn.Linear(up_dim, 1, bias=False),
+    )
+    return layers
+
+
+class GNOT_DISCRIMINATOR(nn.Module):
+    """
+    Basicly GNOT but with added kernel functional for gano discriminator
+    """
+
+    def __init__(
+        self,
+        trunk_size=2,
+        branch_sizes=None,
+        space_dim=2,
+        output_size=3,
+        n_layers=2,
+        n_hidden=64,
+        n_head=1,
+        n_experts=2,
+        n_inner=4,
+        mlp_layers=2,
+        attn_type="linear",
+        act="gelu",
+        ffn_dropout=0.0,
+        attn_dropout=0.0,
+        horiz_fourier_dim=0,
+        kernel_up_dim=32,
+    ):
+        super(GNOT, self).__init__()
+
+        self.horiz_fourier_dim = horiz_fourier_dim
+        self.trunk_size = (
+            trunk_size * (4 * horiz_fourier_dim + 3)
+            if horiz_fourier_dim > 0
+            else trunk_size
+        )
+        self.branch_sizes = (
+            [bsize * (4 * horiz_fourier_dim + 3) for bsize in branch_sizes]
+            if horiz_fourier_dim > 0
+            else branch_sizes
+        )
+        self.n_inputs = len(self.branch_sizes)
+        self.output_size = output_size
+        self.space_dim = space_dim
+        self.kernel_up_dim = kernel_up_dim
+        self.gpt_config = MoEGPTConfig(
+            attn_type=attn_type,
+            embd_pdrop=ffn_dropout,
+            resid_pdrop=ffn_dropout,
+            attn_pdrop=attn_dropout,
+            n_embd=n_hidden,
+            n_head=n_head,
+            n_layer=n_layers,
+            block_size=128,
+            act=act,
+            n_experts=n_experts,
+            space_dim=space_dim,
+            branch_sizes=branch_sizes,
+            n_inputs=len(branch_sizes),
+            n_inner=n_inner,
+        )
+
+        self.trunk_mlp = MLP(
+            self.trunk_size, n_hidden, n_hidden, n_layers=mlp_layers, act=act
+        )
+        self.branch_mlps = nn.ModuleList(
+            [
+                MLP(bsize, n_hidden, n_hidden, n_layers=mlp_layers, act=act)
+                for bsize in self.branch_sizes
+            ]
+        )
+
+        self.blocks = nn.Sequential(
+            *[
+                MIOECrossAttentionBlock(self.gpt_config)
+                for _ in range(self.gpt_config.n_layer)
+            ]
+        )
+
+        self.out_mlp = MLP(n_hidden, n_hidden, output_size, n_layers=mlp_layers)
+
+        self.kernel = kernel(in_chan=self.output_size, up_dim=self.kernel_up_dim)
+
+        # self.apply(self._init_weights)
+
+        self.__name__ = "MIOEGPT"
+
+    def _init_weights(self, module):
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            module.weight.data.normal_(mean=0.0, std=0.0002)
+            if isinstance(module, nn.Linear) and module.bias is not None:
+                module.bias.data.zero_()
+        elif isinstance(module, nn.LayerNorm):
+            module.bias.data.zero_()
+            module.weight.data.fill_(1.0)
+
+    def forward(self, g, u_p, inputs):
+        gs = dgl.unbatch(g)
+        x = pad_sequence([_g.ndata["x"] for _g in gs]).permute(1, 0, 2)  # B, T1, F
+
+        pos = x[:, :, 0 : self.space_dim]
+
+        x = torch.cat([x, u_p.unsqueeze(1).repeat([1, x.shape[1], 1])], dim=-1)
+
+        # if self.horiz_fourier_dim > 0:
+        #     x = horizontal_fourier_embedding(x, self.horiz_fourier_dim)
+        #     z = horizontal_fourier_embedding(z, self.horiz_fourier_dim)
+
+        x = self.trunk_mlp(x)
+        z = MultipleTensors(
+            [self.branch_mlps[i](inputs[i]) for i in range(self.n_inputs)]
+        )
+
+        for block in self.blocks:
+            x = block(x, z, pos)
+        x = self.out_mlp(x)
+
+        x_out = torch.cat(
+            [x[i, :num] for i, num in enumerate(g.batch_num_nodes())], dim=0
+        )
+        x_out = self.kernel(x_out)
+        return x_out
