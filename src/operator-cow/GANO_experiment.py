@@ -60,7 +60,7 @@ def main(config: DictConfig) -> None:
             trunk_size=dataset.config["input_dim"] + dataset.config["theta_dim"],
             branch_sizes=dataset.config["branch_sizes"],
             output_size=dataset.config["output_dim"],
-            space_dim=2,
+            space_dim=1,
             n_layers=config.model.n_layers,
             n_hidden=config.model.n_hidden,
             n_head=config.model.n_head,
@@ -80,7 +80,7 @@ def main(config: DictConfig) -> None:
             trunk_size=dataset.config["input_dim"] + dataset.config["theta_dim"],
             branch_sizes=dataset.config["branch_sizes"],
             output_size=dataset.config["output_dim"],
-            space_dim=2,
+            space_dim=1,
             n_layers=config.model.n_layers,
             n_hidden=config.model.n_hidden,
             n_head=config.model.n_head,
@@ -98,7 +98,7 @@ def main(config: DictConfig) -> None:
             trunk_size=dataset.config["input_dim"] + dataset.config["theta_dim"],
             branch_sizes=dataset.config["branch_sizes"],
             output_size=dataset.config["output_dim"],
-            space_dim=2,
+            space_dim=1,
             n_layers=config.model.n_layers,
             n_hidden=config.model.n_hidden,
             n_head=config.model.n_head,
@@ -157,7 +157,7 @@ def main(config: DictConfig) -> None:
 
     # initialize grf
     grf = GaussianRF(
-        dataset.config["output_dim"],
+        1,
         100,  # hardcoded number of time steps
         alpha=config.grf.alpha,
         tau=config.grf.tau,

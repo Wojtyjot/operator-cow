@@ -229,11 +229,11 @@ def train_GANO(
                     grf=grf,
                     lr_scheduler_generator=lr_scheduler_generator,
                 )
+                wandb.log({"G_loss": G_loss})
             wandb.log(
                 {
                     "W_loss": W_loss,
                     "D_loss": D_loss,
-                    "G_loss": G_loss,
                     "grad_loss": grad_loss,
                     "lr_D": optimizer_discriminator.param_groups[0]["lr"],
                     "lr_G": optimizer_generator.param_groups[0]["lr"],
@@ -244,8 +244,10 @@ def train_GANO(
             log = f"epoch: [{epoch +1}/{epochs}]"
             log += f"W_loss: {W_loss:.4f}"
             log += f"D_loss: {D_loss:.4f}"
-            log += f"G_loss: {G_loss:.4f}"
             log += f"grad_loss: {grad_loss:.4f}"
+
+            if (j + 1) % n_critic == 0:
+                log += f"G_loss: {G_loss:.4f}"
 
             if it % print_freq == 0:
                 print(log)
@@ -292,15 +294,19 @@ def train_batch_GANO_G(
 
     # sample from gaussian random field num of samples = batch_size
     N = u_p.shape[0]
-    z = grf.sample(N, mul=1).unsqeueeze(-1)
+    z = grf.sample(N, mul=1).unsqueeze(-1)
     t = torch.linspace(0, 1, 100).unsqueeze(-1).repeat(N, 1, 1)
     z = torch.cat((t, z), dim=-1)
+    z = MultipleTensors([z])
 
     g, u_p, z = g.to(device), u_p.to(device), z.to(device)
     t = t.to(device)
 
     synthetic = Generator(g, u_p, z)
+    synthetic = synthetic.reshape(N, 100, 1)
     synthetic = torch.cat((t, synthetic), dim=-1)
+    synthetic = MultipleTensors([synthetic])
+
     loss = -torch.mean(Discriminator(g, u_p, synthetic))
 
     loss.backward()
@@ -330,10 +336,10 @@ def train_batch_GANO_D(
 
     # sample from gaussian random field num of samples = batch_size
     N = u_p.shape[0]
-    z = grf.sample(N, mul=1).unsqeueeze(-1)
+    z = grf.sample(N, mul=1).unsqueeze(-1)
     t = torch.linspace(0, 1, 100).unsqueeze(-1).repeat(N, 1, 1)
     z = torch.cat((t, z), dim=-1)
-
+    z = MultipleTensors([z])
     # real already with t concatenated
     # need to cat z with t
 
@@ -341,21 +347,26 @@ def train_batch_GANO_D(
     t = t.to(device)
 
     synthetic = Generator(g, u_p, z)
+    synthetic = synthetic.reshape(N, 100, 1)
     # need to pass it to discriminator and calculate loss
     synthetic = torch.cat((t, synthetic), dim=-1)
 
-    real = g.ndata["y"].squeeze()
+    real = g.ndata["y"]
+    real = real.reshape(N, 100, 1)
+    real = torch.cat((t, real), dim=-1)
+    real = MultipleTensors([real])
+    synthetic = MultipleTensors([synthetic.detach()])
 
     ### passs to discriminator
     W_loss = -torch.mean(Discriminator(g, u_p, real)) + torch.mean(
-        Discriminator(g, u_p, synthetic.detach())
+        Discriminator(g, u_p, synthetic)
     )
 
     # y_pred, y = out.squeeze(), g.ndata["y"].squeeze()
     gradient_penalty = calculate_gradient_penalty(
         Discriminator=Discriminator,
-        real_function=real,
-        fake_function=synthetic,
+        real_function=real[0],
+        fake_function=synthetic[0],
         device=device,
         g=g,
         u_p=u_p,
@@ -409,7 +420,13 @@ def validate_epoch_GANO(
     )
     for artery in arteries:
         artery_one_hot = encode_artery(artery)
-        u_p = torch.from_numpy(artery_one_hot).to(device).unsqueeze(0).repeat(8, 1)
+        u_p = (
+            torch.from_numpy(artery_one_hot)
+            .float()
+            .to(device)
+            .unsqueeze(0)
+            .repeat(8, 1)
+        )
         # normalize
         u_p = normalizer_up.transform(u_p, inverse=False)
         g = dgl.DGLGraph()
@@ -423,8 +440,10 @@ def validate_epoch_GANO(
             z = grf.sample(8, mul=1).unsqueeze(-1)
             t = torch.linspace(0, 1, 100).unsqueeze(-1).repeat(8, 1, 1)
             z = torch.cat((t, z), dim=-1)
+            z = MultipleTensors([z])
             gs, z, u_p = gs.to(device), z.to(device), u_p.to(device)
-            synthetic = Generator(gs, u_p, z)  # (8, 100, 1)
+            synthetic = Generator(gs, u_p, z)
+            synthetic = synthetic.reshape(8, 100, 1)  # (8, 100, 1)
             # Need to denormalize and compute statistics
             synthetic = normalizer_y.transform(synthetic, inverse=True)
             if MFV is None:
@@ -441,5 +460,6 @@ def validate_epoch_GANO(
             MFV_std.item(),
             PI_mean.item(),
             PI_std.item(),
-            plot_generated(MFV, PI, artery),
+            wandb.Image(plot_generated(synthetic)),
         )
+    wandb.log({"Generated_distribution_statistics": tbl})

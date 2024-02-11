@@ -829,7 +829,7 @@ class COWDataset_GANO(DGLDataset):
             _, _, u_p, input_f = self.data[i]
             x = self.create_x()
             y = self.get_y(input_f)
-            u_p = u_p[:10]  # take only artery encoded
+            u_p = u_p[:11]  # take only artery encoded
             g = dgl.DGLGraph()
             g.add_nodes(x.shape[0])
             g.ndata["x"] = torch.from_numpy(x).float()
@@ -857,14 +857,14 @@ class COWDataset_GANO(DGLDataset):
         Create x from time
         """
         x = np.linspace(0, 1, 100)
-        x.reshape(-1, 1)
+        x = x.reshape(-1, 1)
         return x
 
     def get_y(self, in_funcs):
         """
         Get y from in_funcs
         """
-        y = in_funcs[0][1:]
+        y = in_funcs[0][:, 2:]
         return y
 
     def __normalize_y(self):
@@ -918,6 +918,7 @@ def calculate_gradient_penalty(
     # Random weight term for interpolation between real and fake data
     # take out t from real_function
     real_function = real_function[:, :, 1:]
+    fake_function = fake_function[:, :, 1:]
     alpha = torch.randn((real_function.size(0), 1, 1), device=device)
     # Get random interpolation between real and fake data
     interpolates = (
@@ -925,6 +926,7 @@ def calculate_gradient_penalty(
     ).requires_grad_(True)
 
     interpolates = torch.cat((t, interpolates), dim=-1)
+    interpolates = MultipleTensors([interpolates])
     model_interpolates = Discriminator(g, u_p, interpolates)
     grad_outputs = torch.ones(
         model_interpolates.size(), device=device, requires_grad=False

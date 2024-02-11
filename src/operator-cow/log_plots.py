@@ -130,5 +130,5 @@ def plot_generated(velocity: torch.Tensor) -> plt:
         axs.plot(velocity[i, :, 0].detach().cpu().numpy())
     # axs.plot(velocity[0, :, 0].detach().cpu().numpy(), label="Generated")
     axs.set_title("Velocity")
-    axs.legend()
+    # axs.legend()
     return plt

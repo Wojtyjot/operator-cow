@@ -453,7 +453,7 @@ class GNOT_DISCRIMINATOR(nn.Module):
         horiz_fourier_dim=0,
         kernel_up_dim=32,
     ):
-        super(GNOT, self).__init__()
+        super(GNOT_DISCRIMINATOR, self).__init__()
 
         self.horiz_fourier_dim = horiz_fourier_dim
         self.trunk_size = (
