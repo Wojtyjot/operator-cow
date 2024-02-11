@@ -9,10 +9,10 @@ import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, calculate_gradient_penalty
 from grf import GaussianRF
-from log_plots import decode_artery, encode_artery, plot_predictions
+from log_plots import decode_artery, encode_artery, plot_generated, plot_predictions
 from models.optimizer import Adam
 from torch.optim.lr_scheduler import OneCycleLR
-from utils.GANO_utils import compute_MFV, compute_PI
+from utils.GANO_utils import compute_statistics
 from utils.utils import MultipleTensors, get_num_params
 
 
@@ -184,6 +184,7 @@ def train_GANO(
     grad_clip: float,
     normalizer_up,
     normalizer_x,
+    normalizer_y,
     grf: GaussianRF,
     lambda_grad: float = 10.0,
     start_epoch: int = 0,
@@ -214,6 +215,7 @@ def train_GANO(
                 grad_clip=grad_clip,
                 grf=grf,
                 lambda_grad=lambda_grad,
+                lr_scheduler_discriminator=lr_scheduler_discriminator,
             )
             if (j + 1) % n_critic == 0:
                 # train generator
@@ -225,6 +227,7 @@ def train_GANO(
                     device=device,
                     grad_clip=grad_clip,
                     grf=grf,
+                    lr_scheduler_generator=lr_scheduler_generator,
                 )
             wandb.log(
                 {
@@ -232,6 +235,8 @@ def train_GANO(
                     "D_loss": D_loss,
                     "G_loss": G_loss,
                     "grad_loss": grad_loss,
+                    "lr_D": optimizer_discriminator.param_groups[0]["lr"],
+                    "lr_G": optimizer_generator.param_groups[0]["lr"],
                 }
             )
 
@@ -247,36 +252,28 @@ def train_GANO(
 
         # validate epoch to bedzie policzenie statystyk dla generatora
         # oraz zrobienie wykresów dla 10 naczyń
-        val_result = validate_epoch(
-            model=model,
-            metric_func=metric_func,
-            valid_loader=val_loader,
+        validate_epoch_GANO(
+            Generator=Generator,
             device=device,
             normalizer_up=normalizer_up,
+            normalizer_x=normalizer_x,
+            normalizer_y=normalizer_y,
+            grf=grf,
         )
-        wandb.log({"val_L2_loss": val_result["metric"].mean()})
 
-        val_metric = val_result["metric"].sum()
-        loss_val.append(val_metric)
-
-        if val_metric < best_val_metric:
-            best_val_metric = val_metric
-            best_val_epoch = epoch
-            torch.save(
-                model.state_dict(),
-                os.path.join(model_save_path, model_name),
-            )
-
-        result = dict(
-            best_val_epoch=best_val_epoch,
-            best_val_metric=best_val_metric,
-            loss_train=np.asarray(loss_train),
-            loss_val=np.asarray(loss_val),
-            optimizer_state=optimizer.state_dict(),
+        # save models:
+        # save Generator
+        torch.save(
+            Generator.state_dict(),
+            os.path.join(model_save_path, Generator_name),
         )
-        pickle.dump(result, open(os.path.join(model_save_path, result_name), "wb"))
+        # save Discriminator
+        torch.save(
+            Discriminator.state_dict(),
+            os.path.join(model_save_path, Discriminator_name),
+        )
 
-    return result
+    return None
 
 
 def train_batch_GANO_G(
@@ -285,7 +282,7 @@ def train_batch_GANO_G(
     # loss_func: nn.Module,
     data: list,
     optimizer_generator,
-    lr_scheduler,
+    lr_scheduler_generator,
     device: str,
     grad_clip: float,
     grf: GaussianRF,
@@ -310,8 +307,8 @@ def train_batch_GANO_G(
     nn.utils.clip_grad_norm_(Generator.parameters(), grad_clip)
     optimizer_generator.step()
 
-    if lr_scheduler:
-        lr_scheduler.step()
+    if lr_scheduler_generator:
+        lr_scheduler_generator.step()
 
     return loss.item()
 
@@ -322,7 +319,7 @@ def train_batch_GANO_D(
     # loss_func: nn.Module,
     data: list,
     optimizer_discriminator,
-    # lr_scheduler_discriminator,
+    lr_scheduler_discriminator,
     device: str,
     grad_clip: float,
     grf: GaussianRF,
@@ -373,8 +370,8 @@ def train_batch_GANO_D(
     nn.utils.clip_grad_norm_(Discriminator.parameters(), grad_clip)
     optimizer_discriminator.step()
 
-    # if lr_scheduler:
-    #    lr_scheduler.step()
+    if lr_scheduler_discriminator:
+        lr_scheduler_discriminator.step()
 
     return (W_loss.item(), loss.item(), gradient_penalty.item())
 
@@ -383,7 +380,8 @@ def validate_epoch_GANO(
     Generator: nn.Module,
     device: str,
     normalizer_up,
-    normalizer_x,
+    normalizer_x,  # musza byc juz na device
+    normalizer_y,
     grf: GaussianRF,
     # num_samples: int = 80,
 ):
@@ -406,17 +404,42 @@ def validate_epoch_GANO(
         "ACOA",
         "ICA_2",
     ]
-
+    tbl = wandb.Table(
+        columns=["Artery", "MFV_mean", "MFV_std", "PI_mean", "PI_std", "Sample"]
+    )
     for artery in arteries:
         artery_one_hot = encode_artery(artery)
         u_p = torch.from_numpy(artery_one_hot).to(device).unsqueeze(0).repeat(8, 1)
+        # normalize
+        u_p = normalizer_up.transform(u_p, inverse=False)
         g = dgl.DGLGraph()
         g.add_nodes(100)
-        g.ndata["x"] = torch.linspace(0, 1, 100).reshape(-1, 1).to(device)
+        g.ndata["x"] = normalizer_x.transform(
+            torch.linspace(0, 1, 100).reshape(-1, 1).to(device), inverse=False
+        )
         gs = dgl.batch([g for _ in range(8)])
+        MFV, PI = None, None
         for i in range(10):
             z = grf.sample(8, mul=1).unsqueeze(-1)
             t = torch.linspace(0, 1, 100).unsqueeze(-1).repeat(8, 1, 1)
             z = torch.cat((t, z), dim=-1)
             gs, z, u_p = gs.to(device), z.to(device), u_p.to(device)
-            synthetic = Generator(gs, u_p, z)
+            synthetic = Generator(gs, u_p, z)  # (8, 100, 1)
+            # Need to denormalize and compute statistics
+            synthetic = normalizer_y.transform(synthetic, inverse=True)
+            if MFV is None:
+                MFV, PI = compute_statistics(synthetic)
+            else:
+                MFV_new, PI_new = compute_statistics(synthetic)
+                MFV = torch.cat((MFV, MFV_new), dim=0)
+                PI = torch.cat((PI, PI_new), dim=0)
+        MFV_mean, MFV_std = torch.mean(MFV, dim=0), torch.std(MFV, dim=0)
+        PI_mean, PI_std = torch.mean(PI, dim=0), torch.std(PI, dim=0)
+        tbl.add_data(
+            artery,
+            MFV_mean.item(),
+            MFV_std.item(),
+            PI_mean.item(),
+            PI_std.item(),
+            plot_generated(MFV, PI, artery),
+        )

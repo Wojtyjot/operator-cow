@@ -117,3 +117,18 @@ def plot_predictions(
 
     wandb.log({f"{artery} outlet": plt})
     plt.close()
+
+
+def plot_generated(velocity: torch.Tensor) -> plt:
+    """
+    Function for plotting generated samples of velocity
+    all batch on single plot
+    """
+    fig, axs = plt.subplots(1, 1, figsize=(10, 10))
+    fig.suptitle("Generated samples of velocity")
+    for i in range(velocity.shape[0]):
+        axs.plot(velocity[i, :, 0].detach().cpu().numpy())
+    # axs.plot(velocity[0, :, 0].detach().cpu().numpy(), label="Generated")
+    axs.set_title("Velocity")
+    axs.legend()
+    return plt

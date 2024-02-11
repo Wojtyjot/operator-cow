@@ -45,3 +45,18 @@ def compute_PI(velocity: torch.Tensor, MFV: torch.Tensor) -> torch.Tensor:
     max = torch.max(velocity, dim=1)[0]
     PI = (max - min) / MFV
     return PI
+
+
+def compute_statistics(velocity: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Compute MFV and PI of generated samples
+
+    velocity size = (8,100, 1)
+    """
+    MFV = (
+        torch.min(velocity, dim=1)[0]
+        + (torch.max(velocity, dim=1)[0] - torch.min(velocity, dim=1)[0]) / 3
+    )
+    PI = (torch.max(velocity, dim=1)[0] - torch.min(velocity, dim=1)[0]) / MFV
+
+    return MFV, PI

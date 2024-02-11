@@ -98,14 +98,7 @@ class GaussianRF(object):
         coeff[..., 0] = self.sqrt_eig * coeff[..., 0]  # real
         coeff[..., 1] = self.sqrt_eig * coeff[..., 1]  # imag
 
-        ##########torch 1.7###############
-        # u = torch.ifft(coeff, self.dim, normalized=False)
-        # u = u[...,0]
-        ##################################
-
-        #########torch latest#############
         coeff_new = torch.complex(coeff[..., 0], coeff[..., 1])
-        # print(coeff_new.size())
         u = torch.fft.ifft2(coeff_new, dim=(-2, -1), norm=None)
 
         u = u.real
