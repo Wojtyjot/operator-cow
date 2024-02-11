@@ -817,7 +817,7 @@ class COWDataset_GANO(DGLDataset):
         else:
             self.data = np.load(data_path, allow_pickle=True)
 
-        super(COWDataset, self).__init__(name)
+        super(COWDataset_GANO, self).__init__(name)
 
     def process(self):
 
