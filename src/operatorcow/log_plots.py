@@ -132,3 +132,37 @@ def plot_generated(velocity: torch.Tensor) -> plt:
     axs.set_title("Velocity")
     # axs.legend()
     return plt
+
+
+def plot_AE(pred: torch.Tensor, target: torch.Tensor, type: str) -> plt:
+    """
+    Function for plotting and logging AE reconsturctions
+    and targets
+    """
+    if type not in ["target", "reconstruction", "comparison"]:
+        raise ValueError(
+            "type must be one of the following: 'target', 'reconstruction', 'comparison'"
+        )
+
+    if type == "comparison":
+        fig, axs = plt.subplots(1, 1, figsize=(10, 10))
+        fig.suptitle("Reconstruction vs Target")
+        axs.plot(pred[0, :, 0].detach().cpu().numpy(), label="Reconstruction")
+        axs.plot(target[0, :, 0].detach().cpu().numpy(), label="Target")
+        axs.set_title("velocity")
+        axs.legend()
+        return plt
+    elif type == "target":
+        fig, axs = plt.subplots(1, 1, figsize=(10, 10))
+        fig.suptitle("Target")
+        axs.plot(target[0, :, 0].detach().cpu().numpy(), label="Target")
+        axs.set_title("velocity")
+        axs.legend()
+        return plt
+    else:
+        fig, axs = plt.subplots(1, 1, figsize=(10, 10))
+        fig.suptitle("Reconstruction")
+        axs.plot(pred[0, :, 0].detach().cpu().numpy(), label="Reconstruction")
+        axs.set_title("velocity")
+        axs.legend()
+        return plt

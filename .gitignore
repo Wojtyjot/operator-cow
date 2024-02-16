@@ -144,3 +144,4 @@ outputs/*
 
 wandb
 
+src/operatorcow/GANO_ditribution_testing.ipynb

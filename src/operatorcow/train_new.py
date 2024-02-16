@@ -9,7 +9,13 @@ import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, calculate_gradient_penalty
 from grf import GaussianRF
-from log_plots import decode_artery, encode_artery, plot_generated, plot_predictions
+from log_plots import (
+    decode_artery,
+    encode_artery,
+    plot_AE,
+    plot_generated,
+    plot_predictions,
+)
 from models.optimizer import Adam
 from torch.optim.lr_scheduler import OneCycleLR
 from utils.GANO_utils import compute_statistics
@@ -158,7 +164,7 @@ def validate_epoch(
             if len(plotted_vessels) < 10:
 
                 u_p = normalizer_up.transform(u_p, inverse=True)
-                artery = decode_artery(u_p[0][:10].cpu().numpy())
+                artery = decode_artery(u_p[0][:10].cpu().numpy())  # tu nie 11?
 
                 if artery not in plotted_vessels:
                     plot_predictions(y_pred.cpu().numpy(), y.cpu().numpy(), artery)
@@ -463,3 +469,142 @@ def validate_epoch_GANO(
             wandb.Image(plot_generated(synthetic)),
         )
     wandb.log({"Generated_distribution_statistics": tbl})
+
+
+def train_AE(
+    model: nn.Module,
+    loss_func: nn.Module,
+    metric_func: nn.Module,
+    train_loader: MIODataLoader,
+    val_loader: MIODataLoader,
+    optimizer,
+    lr_scheduler,
+    epochs: int,
+    device: str,
+    grad_clip: float,
+    normalizer_up,
+    start_epoch: int = 0,
+    print_freq: int = 20,
+    model_save_path: str = "../../data/checkpoints/",
+    model_name: str = "model.pt",
+    result_name: str = "results.pt",
+):
+
+    it = 0
+    best_val_metric = np.inf
+
+    for epoch in range(epochs):
+        model.train()
+        torch.cuda.empty_cache()
+
+        for batch in train_loader:
+            loss = train_batch_AE(
+                model=model,
+                loss_func=loss_func,
+                data=batch,
+                optimizer=optimizer,
+                lr_scheduler=lr_scheduler,
+                device=device,
+                grad_clip=grad_clip,
+            )
+            wandb.log(
+                {
+                    "MSEloss": loss,
+                    "lr": optimizer.param_groups[0]["lr"],
+                }
+            )
+            loss = np.array(loss)
+            it += 1
+            log = f"epoch: [{epoch +1}/{epochs}]"
+            log += f"loss: {loss[0]:.4f}"
+
+            if it % print_freq == 0:
+                print(log)
+
+        val_result = validate_epoch_AE(
+            model=model,
+            metric_func=metric_func,
+            valid_loader=val_loader,
+            device=device,
+            normalizer_up=normalizer_up,
+        )
+        wandb.log({"val_MSE_loss": val_result["metric"].mean()})
+
+        val_metric = val_result["metric"].sum()
+
+        if val_metric < best_val_metric:
+            best_val_metric = val_metric
+            best_val_epoch = epoch
+            torch.save(
+                model.state_dict(),
+                os.path.join(model_save_path, model_name),
+            )
+
+        return None
+
+
+def train_batch_AE(
+    model: nn.Module,
+    loss_func: nn.Module,
+    data: list,
+    optimizer,
+    lr_scheduler,
+    device: str,
+    grad_clip: float,
+):
+    # func to encode g.ndata['y']
+    optimizer.zero_grad()
+    g, _ = data
+    target = g.ndata["y"].squeeze()
+
+    target = target.to(device)
+    out = model(target)
+
+    loss = loss_func(out, target)
+
+    loss.backward()
+    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    optimizer.step()
+
+    if lr_scheduler:
+        lr_scheduler.step()
+
+    return loss.item()
+
+
+def validate_epoch_AE(
+    model: nn.Module,
+    metric_func: nn.Module,
+    valid_loader: MIODataLoader,
+    device: str,
+    normalizer_y,
+):
+    tbl = wandb.Table(columns=["Target", "MSE_loss", "Predicted", "Comparison"])
+    model.eval()
+    metric_val = []
+    for _, data in enumerate(valid_loader):
+        with torch.no_grad():
+            g, _ = data
+            target = g.ndata["y"].squeeze()
+            target = target.to(device)
+
+            out = model(target)
+            metric = metric_func(out, target)
+            metric_val.append(metric)
+
+    g, _ = data
+    target = g.ndata["y"].squeeze()
+    target = target.to(device)
+    out = model(target)
+    target = normalizer_y.transform(target, inverse=True)
+    out = normalizer_y.transform(out, inverse=True)
+    metric = metric_func(out, target)
+    tbl.add_data(
+        wandb.Image(plot_AE(out, target, type="target")),  # obczaić te funkcje
+        wandb.Image(plot_AE(out, target, type="reconstruction")),
+        metric[0],
+        wandb.Image(plot_AE(out, target, type="comparison")),
+    )
+    wandb.log({"AE_validation": tbl})
+
+    return dict(metric=np.mean(metric_val, axis=0))
