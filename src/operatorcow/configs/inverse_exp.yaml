@@ -41,6 +41,8 @@ model:
   ffn_dropout: 0.0
   attn_dropout: 0.0
   horiz_fourier_dim: 0
+  AE_weights_path: /data/path/placeholder
+  surrogate_weights_path: /data/path/placeholder
   ae:
     layers: [100, 128, 256, 128, 32]
 
