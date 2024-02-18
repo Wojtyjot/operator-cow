@@ -482,7 +482,7 @@ def train_AE(
     epochs: int,
     device: str,
     grad_clip: float,
-    normalizer_up,
+    normalizer_y,
     start_epoch: int = 0,
     print_freq: int = 20,
     model_save_path: str = "../../data/checkpoints/",
@@ -516,7 +516,7 @@ def train_AE(
             loss = np.array(loss)
             it += 1
             log = f"epoch: [{epoch +1}/{epochs}]"
-            log += f"loss: {loss[0]:.4f}"
+            log += f"loss: {loss:.4f}"
 
             if it % print_freq == 0:
                 print(log)
@@ -526,7 +526,7 @@ def train_AE(
             metric_func=metric_func,
             valid_loader=val_loader,
             device=device,
-            normalizer_up=normalizer_up,
+            normalizer_y=normalizer_y,
         )
         wandb.log({"val_MSE_loss": val_result["metric"].mean()})
 
@@ -556,6 +556,7 @@ def train_batch_AE(
     optimizer.zero_grad()
     g, _ = data
     target = g.ndata["y"].squeeze()
+    target = target.reshape(target.shape[0] // 100, 100)
 
     target = target.to(device)
     out = model(target)
@@ -590,7 +591,7 @@ def validate_epoch_AE(
 
             out = model(target)
             metric = metric_func(out, target)
-            metric_val.append(metric)
+            metric_val.append(metric.detach().cpu().numpy())
 
     g, _ = data
     target = g.ndata["y"].squeeze()
@@ -602,7 +603,7 @@ def validate_epoch_AE(
     tbl.add_data(
         wandb.Image(plot_AE(out, target, type="target")),  # obczaić te funkcje
         wandb.Image(plot_AE(out, target, type="reconstruction")),
-        metric[0],
+        metric.item(),
         wandb.Image(plot_AE(out, target, type="comparison")),
     )
     wandb.log({"AE_validation": tbl})

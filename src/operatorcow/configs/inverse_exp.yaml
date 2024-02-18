@@ -1,0 +1,60 @@
+seed: ${generate_random_seed:}
+
+data_dir: ${hydra:runtime.cwd}/data
+
+outputs_dir: ${hydra:runtime.cwd}/outputs
+
+outputs_subdir: dev
+
+job_subdir: dev
+
+hydra:
+  run:
+    dir: outputs/${outputs_subdir}/${hydra.job.name}/${job_subdir}/${now:%Y-%m-%d_%H-%M-%S-%f}
+  job:
+    chdir: true
+  verbose: false
+
+wandb:
+  project: operator-cow
+  dir: ${hydra:runtime.cwd}/outputs
+  mode: online
+  anonymous: allow
+  tags:
+    - development
+
+data:
+  path: /data/path/placeholder
+  batch_size: 32
+
+
+model:
+  name: GNOT
+  n_layers: 3
+  n_hidden: 96
+  n_head: 8
+  n_experts: 4
+  n_inner: 4
+  mlp_layers: 4
+  attn_type: linear
+  act: gelu
+  ffn_dropout: 0.0
+  attn_dropout: 0.0
+  horiz_fourier_dim: 0
+  ae:
+    layers: [100, 128, 256, 128, 32]
+
+inverse:
+  lambda_reg: 0.01
+  max_steps: 2000
+
+training:
+  epochs: 500
+  grad_clip: 1000.0
+
+
+optimizer:
+  lr: 0.001
+  weight_decay: 0.00005
+  beta1: 0.9
+  beta2: 0.999
