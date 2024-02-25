@@ -45,6 +45,13 @@ def get_u0(vel_bc: torch.Tensor, L: float, device: str) -> torch.Tensor:
     return out
 
 
+def initialize_BC():
+    """
+    Function to initialize boundary condition
+    """
+    raise NotImplementedError
+
+
 def optimize_input_test(
     model_surrogate: nn.Module,
     AE_model: nn.Module,

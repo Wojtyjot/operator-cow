@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
-from inverse import optimize_input_test
 from log_plots import plot_predictions
 from models.ae import MLAE
 from models.cgpt import CGPT
@@ -17,6 +16,8 @@ from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
+
+from operatorcow.inverse.inverse import optimize_input_test
 
 logger = logging.getLogger(__name__)
 
