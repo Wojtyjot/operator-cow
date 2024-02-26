@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import wandb
+from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
 
 ## Wszystko musi byc na same device
@@ -18,6 +19,7 @@ from utils.utils import MultipleTensors
 # ZNORMALIZOWAC PRZED WRZUCENIEM DO MODELU
 # NORMALIZACJA RACZEJ W SCOPE COW
 # A0 tez do lossa dodac
+# Dodac jeszcze ze jezeli root to bc bez parmetrow
 
 
 class Artery(object):
@@ -34,6 +36,8 @@ class Artery(object):
         theta: torch.Tensor,
         name: str,
         device: str,
+        mesurement: bool = False,
+        root: bool = False,
     ):
         self.name = name
         self.g = g
@@ -41,33 +45,41 @@ class Artery(object):
         self.theta = theta
         self.inputs_f = inputs_f
         self.L = g.ndata["x"][-1, 0]
-        self.initialize_parameters(inputs_f, theta)
+        self.root = root
+        self.initialize_parameters(mesurement)
 
-    def initialize_parameters(self, mesurement: bool):
+    def initialize_parameters(self, measurement: bool):
         """
         Function to initialize parameters to optimize
 
-        for now mesurement is assumed to be in a middle of artery
+        for now, measurement is assumed to be in the middle of the artery
         """
-        parameters = []
-
-        if mesurement:
-            u_bc = (
+        if measurement:
+            self.u_bc = (
                 self.g.ndata["y"][100 * 100 : 100 * 101, 2]
                 .squeeze()
                 .to(self.device)
-                .rquires_grad_(True)
+                .requires_grad_(True)
             )
+            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+            self.parameters = [self.u_bc, u0]
+
+        elif self.root:
+            self.u_bc = (
+                self.g.ndata["y"][0:100, 2]
+                .squeeze()
+                .to(self.device)
+                .requires_grad_(True)
+            )
+            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+            self.parameters = [u0]
+
         else:
             u_bc = torch.rand(100, 1).to(self.device).requires_grad_(True)
+            u0 = u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+            self.parameters = [u_bc, u0]
 
-        u0 = u_bc[0].detach().repeat(200, 1).to(self.device).requires_grad_(True)
-        parameters.append(u_bc)
-        parameters.append(u0)
-
-        self.parameters = parameters
-
-    def parameters(self):
+    def get_parameters(self):
         """
         Function return parameters to optimize
 
@@ -80,7 +92,11 @@ class Artery(object):
         """
         t = torch.linspace(0, 1, 100).to(self.device).reshape(-1, 1)
         x = torch.zeros(100, 1).to(self.device).reshape(-1, 1)
-        return torch.cat((x, t, self.parameters[0].reshape(-1, 1)), dim=-1)
+
+        if self.root:
+            return torch.cat((x, t, self.u_bc.reshape(-1, 1)), dim=-1)
+        else:
+            return torch.cat((x, t, self.parameters[0].reshape(-1, 1)), dim=-1)
 
     def get_u0(self):
         """
@@ -88,7 +104,11 @@ class Artery(object):
         """
         x = torch.linspace(0, self.L, 200).to(self.device).reshape(-1, 1)
         t = torch.zeros(200, 1).to(self.device).reshape(-1, 1)
-        return torch.cat((x, t, self.parameters[1]), dim=-1)
+
+        if self.root:
+            return torch.cat((x, t, self.parameters[0]), dim=-1)
+        else:
+            return torch.cat((x, t, self.parameters[1]), dim=-1)
 
     def get_inputs(self, model: str):
         """
@@ -103,10 +123,43 @@ class Artery(object):
             return self.g, self.theta, in_f
 
         elif model == "AE":
-            return self.parameters[0]
+            if self.root:
+                raise ValueError("Root artery not supported for AE model")
+
+            return self.parameters[0].reshape(1, 100)
 
         else:
             raise ValueError("Model not recognized must be GNOT or AE")
+
+    def set_u_in(self, u_in: torch.Tensor):
+        self.u_in = u_in
+
+    def get_u_in(self):
+        return self.u_in
+
+    def set_u_out(self, u_out: torch.Tensor):
+        self.u_out = u_out
+
+    def get_u_out(self):
+        return self.u_out
+
+    def set_a_in(self, a_in: torch.Tensor):
+        self.a_in = a_in
+
+    def get_a_in(self):
+        return self.a_in
+
+    def set_a_out(self, a_out: torch.Tensor):
+        self.a_out = a_out
+
+    def get_a_out(self):
+        return self.a_out
+
+    def set_p_in(self, p_in: torch.Tensor):
+        self.p_in = p_in
+
+    def get_p_in(self):
+        return self.p_in
 
 
 class COW(object):
@@ -117,6 +170,7 @@ class COW(object):
     """
 
     # cow musi posiadac ogolne parametry
+    # trzeba jakos dodac sv do theta naczyn
 
     def __init__(
         self,
@@ -128,8 +182,15 @@ class COW(object):
         normalizer_x,
         normalizer_y,
         normalizer_theta,
+        joints_path: str,
     ):
+        self.SV_true = None
+        self.SV = (
+            torch.Tensor(np.random.uniform(70, 140)).to(device).requires_grad_(True)
+        )
+        self.device = device
         self.load_data(data_path)
+        self.create_optimizer()
 
     def load_data(self, data_path: str):
         """
@@ -174,6 +235,8 @@ class COW(object):
             X, Y, theta, in_funcs = np.load(
                 data_path + artery + ".npy", allow_pickle=True
             )
+            if self.SV_true is None:
+                self.SV_true = theta[-1]
             g = dgl.DGLGraph()
             g.add_nodes(X.shape[0])
             g.ndata["x"] = torch.from_numpy(X).float()
@@ -182,7 +245,94 @@ class COW(object):
             theta = torch.from_numpy(theta).float()
             # passing also true values for comparison
             input_f = [torch.from_numpy(in_func).float() for in_func in in_funcs]
+            if artery in ["L_int_carotid_I", "R_int_carotid_I", "Basilar"]:
+                self.arteries.append(
+                    Artery(
+                        g,
+                        input_f,
+                        theta[:-1],
+                        name=artery,
+                        device=self.device,
+                        root=True,
+                    )
+                )
+            else:
+                self.arteries.append(
+                    Artery(g, input_f, theta[:-1], name=artery, device=self.device)
+                )  # Theta in arteries is without SV
 
-            self.arteries.append(
-                Artery(g, input_f, theta, name=artery, device=self.device)
-            )
+    def create_optimizer(self, lr: float = 0.5):
+        """
+        Function creates a single optimizer for all arterial parameters
+        """
+        # TODO test z LBFGS tylko colsure trzeba zdefiniowac
+        p = []
+        for artery in self.arteries:
+            p.extend(artery.get_parameters())
+        self.optimizer = torch.optim.Adam(p, lr=lr)
+
+    def loader_GONT(self, batch_size):
+        # Loader dla gnota req loss mozna w jednym batchu?
+        batch_idx = [
+            list(range(i, min(i + batch_size, len(self.arteries))))
+            for i in range(0, len(self.arteries), batch_size)
+        ]
+        for indices in batch_idx:
+            transposed = zip(*[self.get_arteries(idx, "GNOT") for idx in indices])
+            batched = []
+            for sample in transposed:
+                if isinstance(sample[0], dgl.DGLGraph):
+                    batched.append(dgl.batch(list(sample)))
+                elif isinstance(sample[0], torch.Tensor):
+                    batched.append(torch.stack(sample))
+                elif isinstance(sample[0], MultipleTensors):
+                    sample_ = MultipleTensors(
+                        [
+                            pad_sequence(
+                                [sample[i][j] for i in range(len(sample))]
+                            ).permute(1, 0, 2)
+                            for j in range(len(sample[0]))
+                        ]
+                    )
+                    batched.append(sample_)
+                else:
+                    raise NotImplementedError
+            yield batched, indices
+
+    def loader_AE(self, batch_size):
+        # Loader dla AE # yield also indicies
+        batch_idx = [
+            list(range(i, min(i + batch_size, len(self.arteries))))
+            for i in range(3, len(self.arteries), batch_size)  # idx 0,1,2 to root
+        ]
+        for indices in batch_idx:
+            transposed = zip(*[self.get_arteries(idx, "AE") for idx in indices])
+            batched = []
+            for sample in transposed:
+                if isinstance(sample[0], torch.Tensor):
+                    batched.append(torch.stack(sample))
+                else:
+                    raise NotImplementedError
+
+            yield batched, indices
+
+    def solve_arteries(self, batch_size: int):
+        """
+        Function that computes solution for single artery....
+        Lepiej bachowć
+        """
+        for batch, idx in self.loader_GNOT(batch_size):
+            g, u_p, g_u = batch
+
+            g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
+
+            out = self.model_surrogate(
+                g, u_p, g_u
+            )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
+            out = out.reshape(batch_size, -1, 3)  # mam nadzieje ze to dobrze
+
+    def get_arteries(self, idx, model: str = "GNOT"):
+        try:
+            return self.arteries[idx].get_inputs(model)
+        except ValueError:
+            pass
