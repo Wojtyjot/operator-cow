@@ -4,7 +4,6 @@ import torch
 
 
 class GaussianRF(object):
-
     def __init__(
         self,
         dim,
