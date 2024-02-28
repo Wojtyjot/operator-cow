@@ -8,6 +8,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import wandb
+from data_utils import WeightedLpRelLoss
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
 
@@ -68,6 +69,7 @@ class Artery(object):
                 100 * 100 : 100 * 101, 2
             ].squeeze()
             self.parameters = [self.u_bc, u0]
+            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
         elif self.root:
             self.u_bc = (
@@ -78,11 +80,13 @@ class Artery(object):
             )
             u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
             self.parameters = [u0]
+            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
         else:
             u_bc = torch.rand(100, 1).to(self.device).requires_grad_(True)
             u0 = u_bc[0].detach().repeat(200, 1).requires_grad_(True)
             self.parameters = [u_bc, u0]
+            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
     def get_parameters(self):
         """
@@ -136,6 +140,19 @@ class Artery(object):
         else:
             raise ValueError("Model not recognized must be GNOT or AE")
 
+    def log(self):
+        """
+        Function logs to wandb the artery parameters
+        u_bc as plot
+        """
+
+        plt.plot(self.u_bc.detach().cpu().numpy(), label="reconstructed")
+        plt.plot(self.u_bc_true.detach().cpu().numpy(), label="true")
+        plt.title(f"U_bc for artery {self.name}")
+        plt.legend()
+        wandb.log({self.name: plt})
+        plt.close()
+
     def set_u_in(self, u_in: torch.Tensor):
         self.u_in = u_in
 
@@ -178,6 +195,15 @@ class Artery(object):
     def has_mesurement(self):
         return self.mesurement
 
+    def set_reconstructed_u_mesurement(self, u):  # trzeba zmienić nazwy zmiennych
+        self.u_mesurement = u
+
+    def get_reconstructed_u_mesurement(self):
+        return self.u_mesurement
+
+    def get_true_mesurement(self):
+        return self.mesurement_value
+
 
 class COW(object):
     """
@@ -204,7 +230,7 @@ class COW(object):
         self.rho = 1.06  ## must be in CGS units
         self.SV_true = None
         self.SV = (
-            torch.Tensor(np.random.uniform(70, 140)).to(device).requires_grad_(True)
+            torch.Tensor([np.random.uniform(70, 140)]).to(device).requires_grad_(True)
         )
         self.device = device
         self.model_surrogate = model_surrogate
@@ -214,9 +240,11 @@ class COW(object):
         self.normalizer_y = normalizer_y
         self.normalizer_theta = normalizer_theta
         self.joints_path = joints_path  # TODO
+        self.l2_loss = WeightedLpRelLoss(p=2, component="all", normalizer=None)
         self.load_data(data_path)
         self.create_optimizer()
         self.propagate_SV()
+        self.create_joints(joints_path)
 
     def load_data(self, data_path: str):
         """
@@ -420,6 +448,27 @@ class COW(object):
             # tu musi byc funkcja do zapisu wynikow do artery
             self.update_arteries(out, idx)
 
+    def compute_validation_l2_loss(self, batch_size: int):
+        """
+        Function computes validation loss for all arteries
+        """
+        loss = 0
+        i = 0
+        for batch in self.loader_GNOT(batch_size):
+            i += 1
+            g, u_p, g_u = batch
+
+            g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
+            u_p = self.normalizer_theta.transform(u_p, inverse=False)
+
+            g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
+
+            out = self.model_surrogate(g, u_p, g_u)
+            out = self.normalizer_y.transform(out, inverse=True)
+            y_true = g.ndata["y"].squeeze().to(self.device)
+            loss += self.l2_loss(g, out, y_true)
+        return loss / i
+
     def get_reg_loss(self, batch_size: int):  # raczej różny bs dla AE i GNOT
         """
         Function computes regularization loss from AE
@@ -502,13 +551,25 @@ class COW(object):
         """
         Function computes mesurement loss
         """
-        raise NotImplementedError
+        loss = 0
+        for artery in self.arteries:
+            if artery.has_mesurement():
+                loss += nn.MSELoss()(
+                    artery.get_reconstructed_u_mesurement(),
+                    artery.get_true_mesurement(),
+                )
+        return loss
 
     def compute_SV_loss(self):
         """
         Function computes stroke volume regularization loss
         """
-        raise NotImplementedError
+        if self.SV < 70:
+            return torch.square(self.SV - 70)
+        elif self.SV > 140:
+            return torch.square(self.SV - 140)
+        else:
+            return 0
 
     def update_arteries(self, pred: torch.Tensor, idx: List[int]):
         """
@@ -527,6 +588,10 @@ class COW(object):
             self.arteries[i].set_a_out(pred[i, -100:, 1])
             self.arteries[i].set_p_in(pred[i, :100, 0])
             self.arteries[i].set_p_out(pred[i, -100:, 0])
+            if self.arteries[i].has_mesurement():
+                self.arteries[i].set_reconstructed_u_mesurement(
+                    pred[i, 100 * 100 : 100 * 101, 2]
+                )
 
     def get_arteries(self, idx, model: str = "GNOT"):
         try:
@@ -541,9 +606,69 @@ class COW(object):
         for artery in self.arteries:
             artery.set_SV(self.SV)
 
-    def solve(self):
+    def log_arteries(self):
         """
-        Function for solving inverse problem on whole COW
+        Function logs all arteries to wandb
         """
+        for artery in self.arteries:
+            artery.log()
 
-        raise NotImplementedError
+    def solve(
+        self,
+        max_iters: int,
+        eps: float,
+        batch_szie: int,
+        lambda_reg: float,
+        lamda_mes: float,
+        lambda_sv: float,
+        lambda_bif: float,
+        log_every: int,
+    ):
+        """
+        Function for solving inverse problem on whole COW:
+
+        step 1 solve each artery separately
+        step 2 ccompute loss,
+        step 3 compute gradients
+        step 4 update trainable parameters
+        """
+        iter = 0
+        for i in range(max_iters):
+            iter += 1
+            self.solve_arteries(batch_szie)
+            loss = 0
+            loss += lambda_reg * self.get_reg_loss(batch_szie)
+            loss += lamda_mes * self.compute_mesurement_loss()
+            loss += lambda_sv * self.compute_SV_loss()
+            loss_mass, loss_pressure = self.compute_bifurcation_loss()
+            loss += lambda_bif * (loss_mass + loss_pressure)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            self.propagate_SV()
+            if self.track and iter % log_every == 0:
+                wandb.log(
+                    {
+                        "loss": loss.item(),
+                        "reg_loss": lambda_reg * self.get_reg_loss(batch_szie).item(),
+                        "mes_loss": lamda_mes * self.compute_mesurement_loss().item(),
+                        "SV_loss": lambda_sv * self.compute_SV_loss().item(),
+                        "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
+                    }
+                )
+                self.log_arteries()
+                wandb.log(
+                    {
+                        "SV": self.SV.item(),
+                        "Validation loss": self.compute_validation_l2_loss(
+                            batch_szie
+                        ).item(),
+                    },
+                )
+
+            if loss < eps:
+                break
+
+        validation_loss = self.compute_validation_l2_loss(batch_szie)
+        wandb.log({"Validation loss": validation_loss.item()})
+        return validation_loss
