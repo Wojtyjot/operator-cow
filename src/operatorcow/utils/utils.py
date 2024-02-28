@@ -463,6 +463,33 @@ class UnitTransformer:
                 return (X - self.mean[:, component]) / self.std[:, component]
 
 
+class UnitTransformer_2:
+    def __init__(self, mean, std):
+        self.mean = mean
+        self.std = std
+
+    def to(self, device):
+        self.mean = self.mean.to(device)
+        self.std = self.std.to(device)
+        return self
+
+    def transform(self, X, inverse=True, component="all"):
+        if component == "all" or "all-reduce":
+            if inverse:
+                orig_shape = X.shape
+                return (X * (self.std - 1e-8) + self.mean).view(orig_shape)
+            else:
+                return (X - self.mean) / self.std
+        else:
+            if inverse:
+                orig_shape = X.shape
+                return (
+                    X * (self.std[:, component] - 1e-8) + self.mean[:, component]
+                ).view(orig_shape)
+            else:
+                return (X - self.mean[:, component]) / self.std[:, component]
+
+
 """
     Simple pointwise normalization layer, all data must contain the same length, used only for FNO datasets
     X: B, N, C

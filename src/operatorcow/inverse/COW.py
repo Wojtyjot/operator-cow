@@ -226,6 +226,7 @@ class COW(object):
         normalizer_y,
         normalizer_theta,
         joints_path: str,
+        lr: float,
     ):
         self.rho = 1.06  ## must be in CGS units
         self.SV_true = None
@@ -242,7 +243,7 @@ class COW(object):
         self.joints_path = joints_path  # TODO
         self.l2_loss = WeightedLpRelLoss(p=2, component="all", normalizer=None)
         self.load_data(data_path)
-        self.create_optimizer()
+        self.create_optimizer(lr)
         self.propagate_SV()
         self.create_joints(joints_path)
 
@@ -617,7 +618,7 @@ class COW(object):
         self,
         max_iters: int,
         eps: float,
-        batch_szie: int,
+        batch_size: int,
         lambda_reg: float,
         lamda_mes: float,
         lambda_sv: float,
@@ -635,9 +636,9 @@ class COW(object):
         iter = 0
         for i in range(max_iters):
             iter += 1
-            self.solve_arteries(batch_szie)
+            self.solve_arteries(batch_size)
             loss = 0
-            loss += lambda_reg * self.get_reg_loss(batch_szie)
+            loss += lambda_reg * self.get_reg_loss(batch_size)
             loss += lamda_mes * self.compute_mesurement_loss()
             loss += lambda_sv * self.compute_SV_loss()
             loss_mass, loss_pressure = self.compute_bifurcation_loss()
@@ -650,7 +651,7 @@ class COW(object):
                 wandb.log(
                     {
                         "loss": loss.item(),
-                        "reg_loss": lambda_reg * self.get_reg_loss(batch_szie).item(),
+                        "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
                         "mes_loss": lamda_mes * self.compute_mesurement_loss().item(),
                         "SV_loss": lambda_sv * self.compute_SV_loss().item(),
                         "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
@@ -661,7 +662,7 @@ class COW(object):
                     {
                         "SV": self.SV.item(),
                         "Validation loss": self.compute_validation_l2_loss(
-                            batch_szie
+                            batch_size
                         ).item(),
                     },
                 )
@@ -669,6 +670,6 @@ class COW(object):
             if loss < eps:
                 break
 
-        validation_loss = self.compute_validation_l2_loss(batch_szie)
+        validation_loss = self.compute_validation_l2_loss(batch_size)
         wandb.log({"Validation loss": validation_loss.item()})
         return validation_loss
