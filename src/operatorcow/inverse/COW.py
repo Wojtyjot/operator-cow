@@ -51,6 +51,8 @@ class Artery(object):
         self.mesurement = mesurement
         self.initialize_parameters(mesurement)
 
+        # del self.g.ndata['y']
+
     def initialize_parameters(self, measurement: bool):
         """
         Function to initialize parameters to optimize
@@ -60,21 +62,22 @@ class Artery(object):
         if measurement:
             self.u_bc = (
                 self.g.ndata["y"][100 * 100 : 100 * 101, 2]
-                .squeeze()
+                .unsqueeze(-1)
                 .to(self.device)
                 .requires_grad_(True)
             )
+            print(self.u_bc.shape)
             u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
-            self.mesurement_value = self.g.ndata["y"][
-                100 * 100 : 100 * 101, 2
-            ].squeeze()
+            self.mesurement_value = (
+                self.g.ndata["y"][100 * 100 : 100 * 101, 2].squeeze().to(self.device)
+            )
             self.parameters = [self.u_bc, u0]
             self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
         elif self.root:
             self.u_bc = (
                 self.g.ndata["y"][0:100, 2]
-                .squeeze()
+                .unsqueeze(-1)
                 .to(self.device)
                 .requires_grad_(True)
             )
@@ -83,9 +86,9 @@ class Artery(object):
             self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
         else:
-            u_bc = torch.rand(100, 1).to(self.device).requires_grad_(True)
-            u0 = u_bc[0].detach().repeat(200, 1).requires_grad_(True)
-            self.parameters = [u_bc, u0]
+            self.u_bc = torch.rand(100, 1).to(self.device).requires_grad_(True)
+            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+            self.parameters = [self.u_bc, u0]
             self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
     def get_parameters(self):
@@ -129,7 +132,7 @@ class Artery(object):
             in_bc = self.get_u_BC()
             in_f = MultipleTensors([i for i in (in_bc, p0, u0, a0)])
 
-            return self.g, torch.cat((self.theta, self.SV)), in_f
+            return self.g, torch.cat((self.theta.to(self.device), self.SV)), in_f
 
         elif model == "AE":
             if self.root:
@@ -245,7 +248,7 @@ class COW(object):
         self.load_data(data_path)
         self.create_optimizer(lr)
         self.propagate_SV()
-        self.create_joints(joints_path)
+        self.joints = self.create_joints(joints_path)
 
     def load_data(self, data_path: str):
         """
@@ -311,6 +314,7 @@ class COW(object):
                         name=artery,
                         device=self.device,
                         root=True,
+                        mesurement=False,
                     )
                 )
             elif artery in [
@@ -338,7 +342,14 @@ class COW(object):
 
             else:
                 self.arteries.append(
-                    Artery(g, input_f, theta[:-1], name=artery, device=self.device)
+                    Artery(
+                        g,
+                        input_f,
+                        theta[:-1],
+                        name=artery,
+                        device=self.device,
+                        mesurement=False,
+                    )
                 )  # Theta in arteries is without SV
 
     def create_joints(self, joints_csv):
@@ -382,7 +393,7 @@ class COW(object):
             p.extend(artery.get_parameters())
         self.optimizer = torch.optim.Adam(p, lr=lr)
 
-    def loader_GONT(self, batch_size):
+    def loader_GNOT(self, batch_size):
         # Loader dla gnota req loss mozna w jednym batchu?
         batch_idx = [
             list(range(i, min(i + batch_size, len(self.arteries))))
@@ -432,13 +443,17 @@ class COW(object):
         Function that computes solution for single artery....
         Lepiej bachowć
         """
+        # with torch.no_grad(): # może rozjebać wszystko ale zobaczmy
         for batch, idx in self.loader_GNOT(batch_size):
+
             g, u_p, g_u = batch  # znormalizowac trzeba to
+
+            g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
 
             g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
             u_p = self.normalizer_theta.transform(u_p, inverse=False)
 
-            g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
+            # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
 
             out = self.model_surrogate(
                 g, u_p, g_u
@@ -447,6 +462,7 @@ class COW(object):
             out = out.reshape(batch_size, -1, 3)  # mam nadzieje ze to dobrze
 
             # tu musi byc funkcja do zapisu wynikow do artery
+            # print(idx)
             self.update_arteries(out, idx)
 
     def compute_validation_l2_loss(self, batch_size: int):
@@ -455,7 +471,7 @@ class COW(object):
         """
         loss = 0
         i = 0
-        for batch in self.loader_GNOT(batch_size):
+        for batch, idx in self.loader_GNOT(batch_size):
             i += 1
             g, u_p, g_u = batch
 
@@ -477,11 +493,40 @@ class COW(object):
         reg_loss = 0
         for batch in self.loader_AE(batch_size):
             u_bc = batch[0]
-            u_bc = self.normalizer_x.transform(u_bc, inverse=False)
+            # normalization needs to be done  ned to add dimensions 2
+            # print(f"u_bc.shape = {u_bc.shape}")
+            u_bc = torch.cat(
+                (
+                    torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
+                    u_bc.unsqueeze(-1),
+                ),
+                dim=-1,
+            )
+            # print(f"u_bc.shape = {u_bc.shape}")
+            u_bc = u_bc.reshape(-1, 3)
+            u_bc = self.normalizer_y.transform(u_bc, inverse=False)
+            u_bc = u_bc.reshape(batch[0].shape[0], -1, 3)
+            u_bc = u_bc[:, :, -1].squeeze()
             u_bc = u_bc.to(self.device)
+            # print(f"u_bc.shape before me = {u_bc.shape}")
             out = self.AE_model(u_bc)
+            # print(out.shape)
+            try:
+                out = torch.cat(
+                    (
+                        torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
+                        out.unsqueeze(-1),
+                    ),
+                    dim=-1,
+                )
+            except:
+                out = torch.cat(
+                    (torch.zeros(100, 2).to(self.device), out.unsqueeze(-1)), dim=-1
+                )
+            out = out.reshape(-1, 3)
             out = self.normalizer_y.transform(out, inverse=True)
-            out = out.reshape(batch_size, -1, 1)
+            out = out.reshape(batch[0].shape[0], -1, 3)
+            out = out[:, :, -1].squeeze()
             reg_loss += nn.MSELoss()(u_bc, out)
         return reg_loss
 
@@ -495,9 +540,9 @@ class COW(object):
         loss_pressure = 0
         for joint in self.joints:
             p, d1, d2, merging = joint
-            p = self.arteries[p]
-            d1 = self.arteries[d1]
-            d2 = self.arteries[d2]
+            p = self.arteries[int(p)]
+            d1 = self.arteries[int(d1)]
+            d2 = self.arteries[int(d2)]
             if merging:
                 loss_mass += torch.mean(
                     torch.square(
@@ -582,15 +627,18 @@ class COW(object):
         ]
         """
 
-        for i in idx:
-            self.arteries[i].set_u_in(pred[i, :100, 2])
-            self.arteries[i].set_u_out(pred[i, -100:, 2])
-            self.arteries[i].set_a_in(pred[i, :100, 1])
-            self.arteries[i].set_a_out(pred[i, -100:, 1])
-            self.arteries[i].set_p_in(pred[i, :100, 0])
-            self.arteries[i].set_p_out(pred[i, -100:, 0])
-            if self.arteries[i].has_mesurement():
-                self.arteries[i].set_reconstructed_u_mesurement(
+        for i, idx in enumerate(idx):
+            # print(pred.shape)
+            # print(f"i == {i}")
+            # print(f"idx = {idx}")
+            self.arteries[idx].set_u_in(pred[i, :100, 2])
+            self.arteries[idx].set_u_out(pred[i, -100:, 2])
+            self.arteries[idx].set_a_in(pred[i, :100, 1])
+            self.arteries[idx].set_a_out(pred[i, -100:, 1])
+            self.arteries[idx].set_p_in(pred[i, :100, 0])
+            self.arteries[idx].set_p_out(pred[i, -100:, 0])
+            if self.arteries[idx].has_mesurement():
+                self.arteries[idx].set_reconstructed_u_mesurement(
                     pred[i, 100 * 100 : 100 * 101, 2]
                 )
 
@@ -620,7 +668,7 @@ class COW(object):
         eps: float,
         batch_size: int,
         lambda_reg: float,
-        lamda_mes: float,
+        lambda_mes: float,
         lambda_sv: float,
         lambda_bif: float,
         log_every: int,
@@ -639,7 +687,7 @@ class COW(object):
             self.solve_arteries(batch_size)
             loss = 0
             loss += lambda_reg * self.get_reg_loss(batch_size)
-            loss += lamda_mes * self.compute_mesurement_loss()
+            loss += lambda_mes * self.compute_mesurement_loss()
             loss += lambda_sv * self.compute_SV_loss()
             loss_mass, loss_pressure = self.compute_bifurcation_loss()
             loss += lambda_bif * (loss_mass + loss_pressure)
@@ -647,13 +695,14 @@ class COW(object):
             loss.backward()
             self.optimizer.step()
             self.propagate_SV()
+            print(loss.item())
             if self.track and iter % log_every == 0:
                 wandb.log(
                     {
                         "loss": loss.item(),
                         "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
-                        "mes_loss": lamda_mes * self.compute_mesurement_loss().item(),
-                        "SV_loss": lambda_sv * self.compute_SV_loss().item(),
+                        "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
+                        "SV_loss": lambda_sv * self.compute_SV_loss(),
                         "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
                     }
                 )
@@ -673,3 +722,19 @@ class COW(object):
         validation_loss = self.compute_validation_l2_loss(batch_size)
         wandb.log({"Validation loss": validation_loss.item()})
         return validation_loss
+
+    def solve_accumulate(
+        self,
+        max_iters: int,
+        eps: float,
+        batch_size: int,
+        lambda_reg: float,
+        lambda_mes: float,
+        lambda_sv: float,
+        lambda_bif: float,
+        log_every: int,
+    ):
+        """
+        Solving inverse proble one joint at a time and accumulating
+        gradient
+        """

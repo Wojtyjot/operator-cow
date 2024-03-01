@@ -47,26 +47,64 @@ def main(config: DictConfig) -> None:
 
     # create normalizers from data not dataset.
     normalizer_x = UnitTransformer_2(
-        mean=torch.Tensor([[0.5000]]), std=torch.Tensor([[0.2916]])
+        mean=torch.Tensor([[2.0742, 0.5000]]), std=torch.Tensor([[3.3294, 0.2916]])
     )
     normalizer_y = UnitTransformer_2(
-        mean=torch.Tensor([[32.0895]]), std=torch.Tensor([[26.3722]])
+        mean=torch.Tensor([[1.1865e05, 6.1614e-02, 3.2138e01]]),
+        std=torch.Tensor([[2.9567e04, 4.1075e-02, 2.6303e01]]),
     )
     normalizer_theta = UnitTransformer_2(
         mean=torch.Tensor(
             [
                 [
-                    0.0000,
-                    0.1111,
-                    0.0556,
-                    0.1111,
-                    0.1111,
-                    0.1111,
-                    0.1111,
-                    0.1111,
-                    0.1111,
-                    0.0556,
-                    0.1111,
+                    0.0000e00,
+                    1.1111e-01,
+                    5.5556e-02,
+                    1.1111e-01,
+                    1.1111e-01,
+                    1.1111e-01,
+                    1.1111e-01,
+                    1.1111e-01,
+                    1.1111e-01,
+                    5.5556e-02,
+                    1.1111e-01,
+                    1.7730e01,
+                    1.7725e01,
+                    2.9040e00,
+                    4.9763e-01,
+                    4.9880e-01,
+                    1.4992e00,
+                    1.5056e00,
+                    2.4022e00,
+                    2.4074e00,
+                    1.2005e00,
+                    1.1999e00,
+                    4.9963e-01,
+                    4.9966e-01,
+                    3.3025e00,
+                    3.2959e00,
+                    2.9919e-01,
+                    8.6087e00,
+                    8.5945e00,
+                    2.0086e-01,
+                    2.0012e-01,
+                    1.6210e-01,
+                    2.0003e-01,
+                    1.9992e-01,
+                    7.3011e-02,
+                    7.3063e-02,
+                    1.4271e-01,
+                    1.4297e-01,
+                    1.1684e-01,
+                    1.1700e-01,
+                    1.0681e-01,
+                    1.0699e-01,
+                    1.1992e-01,
+                    1.1973e-01,
+                    7.3971e-02,
+                    1.0492e-01,
+                    1.0506e-01,
+                    1.2307e02,
                 ]
             ]
         ),
@@ -84,6 +122,43 @@ def main(config: DictConfig) -> None:
                     3.1428e-01,
                     2.2907e-01,
                     3.1428e-01,
+                    8.8919e-01,
+                    8.8508e-01,
+                    1.3855e-01,
+                    2.5052e-02,
+                    2.5174e-02,
+                    7.5095e-02,
+                    7.6750e-02,
+                    1.2210e-01,
+                    1.2138e-01,
+                    6.0034e-02,
+                    5.9057e-02,
+                    2.5083e-02,
+                    2.4387e-02,
+                    1.6181e-01,
+                    1.5916e-01,
+                    1.4958e-02,
+                    4.2719e-01,
+                    4.3104e-01,
+                    9.8974e-03,
+                    1.0155e-02,
+                    8.2288e-03,
+                    1.0284e-02,
+                    1.0545e-02,
+                    3.7212e-03,
+                    3.5598e-03,
+                    7.0221e-03,
+                    6.8241e-03,
+                    5.7332e-03,
+                    5.8618e-03,
+                    5.1393e-03,
+                    5.4781e-03,
+                    6.1554e-03,
+                    6.0671e-03,
+                    3.6297e-03,
+                    5.3287e-03,
+                    5.2427e-03,
+                    1.1474e01,
                 ]
             ]
         ),
@@ -132,6 +207,8 @@ def main(config: DictConfig) -> None:
         device=device,
         joints_path=config.data.joints_path,
         lr=config.inverse.lr,
+        track=config.log,
+        data_path=config.data.data_path,
     )
 
     L2 = cow.solve(
@@ -142,6 +219,7 @@ def main(config: DictConfig) -> None:
         lambda_bif=config.inverse.lambda_bif,
         lambda_sv=config.inverse.lambda_sv,
         lamda_mes=config.inverse.lamda_mes,
+        log_every=config.inverse.log_every,
     )
 
     print(L2)

@@ -60,5 +60,6 @@ inverse:
   eps: 0.000006
   batch_size: 4
   lr: 0.5
+  log_every: 100
 
 
