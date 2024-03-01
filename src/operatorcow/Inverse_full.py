@@ -211,7 +211,7 @@ def main(config: DictConfig) -> None:
         data_path=config.data.data_path,
     )
 
-    L2 = cow.solve(
+    L2 = cow.solve_accumulate(
         max_iters=config.inverse.max_iters,
         eps=config.inverse.eps,
         batch_size=config.inverse.batch_size,

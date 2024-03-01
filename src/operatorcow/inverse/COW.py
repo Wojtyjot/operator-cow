@@ -393,12 +393,15 @@ class COW(object):
             p.extend(artery.get_parameters())
         self.optimizer = torch.optim.Adam(p, lr=lr)
 
-    def loader_GNOT(self, batch_size):
+    def loader_GNOT(self, batch_size, batch_idx=None):
         # Loader dla gnota req loss mozna w jednym batchu?
-        batch_idx = [
-            list(range(i, min(i + batch_size, len(self.arteries))))
-            for i in range(0, len(self.arteries), batch_size)
-        ]
+        if batch_idx is not None:
+            batch_idx = batch_idx
+        else:
+            batch_idx = [
+                list(range(i, min(i + batch_size, len(self.arteries))))
+                for i in range(0, len(self.arteries), batch_size)
+            ]
         for indices in batch_idx:
             transposed = zip(*[self.get_arteries(idx, "GNOT") for idx in indices])
             batched = []
@@ -421,12 +424,15 @@ class COW(object):
                     raise NotImplementedError
             yield batched, indices
 
-    def loader_AE(self, batch_size):
+    def loader_AE(self, batch_size, batch_idx=None):
         # Loader dla AE # yield also indicies
-        batch_idx = [
-            list(range(i, min(i + batch_size, len(self.arteries))))
-            for i in range(3, len(self.arteries), batch_size)  # idx 0,1,2 to root
-        ]
+        if batch_idx is not None:
+            batch_idx = batch_idx
+        else:
+            batch_idx = [
+                list(range(i, min(i + batch_size, len(self.arteries))))
+                for i in range(3, len(self.arteries), batch_size)  # idx 0,1,2 to root
+            ]
         for indices in batch_idx:
             transposed = zip(*[self.get_arteries(idx, "AE") for idx in indices])
             batched = []
@@ -438,32 +444,64 @@ class COW(object):
 
             yield batched
 
-    def solve_arteries(self, batch_size: int):
+    def solve_arteries(self, batch_size: int, batch_idx=None):
         """
         Function that computes solution for single artery....
         Lepiej bachowć
         """
         # with torch.no_grad(): # może rozjebać wszystko ale zobaczmy
-        for batch, idx in self.loader_GNOT(batch_size):
+        if batch_idx is not None:
+            batch_idx = batch_idx
+            # TODO
+            for batch, idx in self.loader_GNOT(batch_size, batch_idx):
+                g, u_p, g_u = batch
 
-            g, u_p, g_u = batch  # znormalizowac trzeba to
+                g, u_p, g_u = (
+                    g.to(self.device),
+                    u_p.to(self.device),
+                    g_u.to(self.device),
+                )
 
-            g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
+                g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
+                u_p = self.normalizer_theta.transform(u_p, inverse=False)
 
-            g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
-            u_p = self.normalizer_theta.transform(u_p, inverse=False)
+                # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
 
-            # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
+                out = self.model_surrogate(
+                    g, u_p, g_u
+                )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
+                out = self.normalizer_y.transform(out, inverse=True)
+                out = out.reshape(batch_size, -1, 3)  # mam nadzieje ze to dobrze
 
-            out = self.model_surrogate(
-                g, u_p, g_u
-            )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
-            out = self.normalizer_y.transform(out, inverse=True)
-            out = out.reshape(batch_size, -1, 3)  # mam nadzieje ze to dobrze
+                # tu musi byc funkcja do zapisu wynikow do artery
+                # print(idx)
+                self.update_arteries(out, idx)
 
-            # tu musi byc funkcja do zapisu wynikow do artery
-            # print(idx)
-            self.update_arteries(out, idx)
+        else:
+            for batch, idx in self.loader_GNOT(batch_size):
+
+                g, u_p, g_u = batch  # znormalizowac trzeba to
+
+                g, u_p, g_u = (
+                    g.to(self.device),
+                    u_p.to(self.device),
+                    g_u.to(self.device),
+                )
+
+                g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
+                u_p = self.normalizer_theta.transform(u_p, inverse=False)
+
+                # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
+
+                out = self.model_surrogate(
+                    g, u_p, g_u
+                )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
+                out = self.normalizer_y.transform(out, inverse=True)
+                out = out.reshape(batch_size, -1, 3)  # mam nadzieje ze to dobrze
+
+                # tu musi byc funkcja do zapisu wynikow do artery
+                # print(idx)
+                self.update_arteries(out, idx)
 
     def compute_validation_l2_loss(self, batch_size: int):
         """
@@ -486,51 +524,90 @@ class COW(object):
             loss += self.l2_loss(g, out, y_true)
         return loss / i
 
-    def get_reg_loss(self, batch_size: int):  # raczej różny bs dla AE i GNOT
+    def get_reg_loss(
+        self, batch_size: int, batch_idx=None
+    ):  # raczej różny bs dla AE i GNOT
         """
         Function computes regularization loss from AE
         """
         reg_loss = 0
-        for batch in self.loader_AE(batch_size):
-            u_bc = batch[0]
-            # normalization needs to be done  ned to add dimensions 2
-            # print(f"u_bc.shape = {u_bc.shape}")
-            u_bc = torch.cat(
-                (
-                    torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
-                    u_bc.unsqueeze(-1),
-                ),
-                dim=-1,
-            )
-            # print(f"u_bc.shape = {u_bc.shape}")
-            u_bc = u_bc.reshape(-1, 3)
-            u_bc = self.normalizer_y.transform(u_bc, inverse=False)
-            u_bc = u_bc.reshape(batch[0].shape[0], -1, 3)
-            u_bc = u_bc[:, :, -1].squeeze()
-            u_bc = u_bc.to(self.device)
-            # print(f"u_bc.shape before me = {u_bc.shape}")
-            out = self.AE_model(u_bc)
-            # print(out.shape)
-            try:
-                out = torch.cat(
+
+        if batch_idx is not None:
+            batch_idx = batch_idx
+            for batch in self.loader_AE(batch_size, batch_idx):
+                u_bc = batch[0]
+                # normalization needs to be done  ned to add dimensions 2
+                u_bc = torch.cat(
                     (
                         torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
-                        out.unsqueeze(-1),
+                        u_bc.unsqueeze(-1),
                     ),
                     dim=-1,
                 )
-            except:
-                out = torch.cat(
-                    (torch.zeros(100, 2).to(self.device), out.unsqueeze(-1)), dim=-1
+                u_bc = u_bc.reshape(-1, 3)
+                u_bc = self.normalizer_y.transform(u_bc, inverse=False)
+                u_bc = u_bc.reshape(batch[0].shape[0], -1, 3)
+                u_bc = u_bc[:, :, -1].squeeze()
+                u_bc = u_bc.to(self.device)
+                out = self.AE_model(u_bc)
+                try:
+                    out = torch.cat(
+                        (
+                            torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
+                            out.unsqueeze(-1),
+                        ),
+                        dim=-1,
+                    )
+                except:
+                    out = torch.cat(
+                        (torch.zeros(100, 2).to(self.device), out.unsqueeze(-1)), dim=-1
+                    )
+                out = out.reshape(-1, 3)
+                out = self.normalizer_y.transform(out, inverse=True)
+                out = out.reshape(batch[0].shape[0], -1, 3)
+                out = out[:, :, -1].squeeze()
+                reg_loss += nn.MSELoss()(u_bc, out)
+        else:
+            for batch in self.loader_AE(batch_size):
+                u_bc = batch[0]
+                # normalization needs to be done  ned to add dimensions 2
+                # print(f"u_bc.shape = {u_bc.shape}")
+                u_bc = torch.cat(
+                    (
+                        torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
+                        u_bc.unsqueeze(-1),
+                    ),
+                    dim=-1,
                 )
-            out = out.reshape(-1, 3)
-            out = self.normalizer_y.transform(out, inverse=True)
-            out = out.reshape(batch[0].shape[0], -1, 3)
-            out = out[:, :, -1].squeeze()
-            reg_loss += nn.MSELoss()(u_bc, out)
+                # print(f"u_bc.shape = {u_bc.shape}")
+                u_bc = u_bc.reshape(-1, 3)
+                u_bc = self.normalizer_y.transform(u_bc, inverse=False)
+                u_bc = u_bc.reshape(batch[0].shape[0], -1, 3)
+                u_bc = u_bc[:, :, -1].squeeze()
+                u_bc = u_bc.to(self.device)
+                # print(f"u_bc.shape before me = {u_bc.shape}")
+                out = self.AE_model(u_bc)
+                # print(out.shape)
+                try:
+                    out = torch.cat(
+                        (
+                            torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
+                            out.unsqueeze(-1),
+                        ),
+                        dim=-1,
+                    )
+                except:
+                    out = torch.cat(
+                        (torch.zeros(100, 2).to(self.device), out.unsqueeze(-1)), dim=-1
+                    )
+                out = out.reshape(-1, 3)
+                out = self.normalizer_y.transform(out, inverse=True)
+                out = out.reshape(batch[0].shape[0], -1, 3)
+                out = out[:, :, -1].squeeze()
+                reg_loss += nn.MSELoss()(u_bc, out)
         return reg_loss
 
-    def compute_bifurcation_loss(self):
+    def compute_bifurcation_loss(self, j=None):
         """
         Function computes bifurcation loss
 
@@ -538,8 +615,8 @@ class COW(object):
         """
         loss_mass = 0
         loss_pressure = 0
-        for joint in self.joints:
-            p, d1, d2, merging = joint
+        if j is not None:
+            p, d1, d2, merging = j
             p = self.arteries[int(p)]
             d1 = self.arteries[int(d1)]
             d2 = self.arteries[int(d2)]
@@ -591,19 +668,82 @@ class COW(object):
                         - 0.5 * self.rho * torch.square(d2.get_u_in())
                     )
                 )
+
+        else:
+            for joint in self.joints:
+                p, d1, d2, merging = joint
+                p = self.arteries[int(p)]
+                d1 = self.arteries[int(d1)]
+                d2 = self.arteries[int(d2)]
+                if merging:
+                    loss_mass += torch.mean(
+                        torch.square(
+                            p.get_u_in() * p.get_a_in()
+                            - d1.get_u_out() * d1.get_a_out()
+                            - d2.get_u_out() * d2.get_a_out()
+                        )
+                    )
+                    loss_pressure += torch.mean(
+                        torch.square(
+                            p.get_p_in()
+                            + 0.5 * self.rho * torch.square(p.get_u_in())
+                            - d1.get_p_out()
+                            - 0.5 * self.rho * torch.square(d1.get_u_out())
+                        )
+                    )
+                    loss_pressure += torch.mean(
+                        torch.square(
+                            p.get_p_in()
+                            + 0.5 * self.rho * torch.square(p.get_u_in())
+                            - d2.get_p_out()
+                            - 0.5 * self.rho * torch.square(d2.get_u_out())
+                        )
+                    )
+                else:
+                    loss_mass += torch.mean(
+                        torch.square(
+                            p.get_u_out() * p.get_a_out()
+                            - d1.get_u_in() * d1.get_a_in()
+                            - d2.get_u_in() * d2.get_a_in()
+                        )
+                    )
+                    loss_pressure += torch.mean(
+                        torch.square(
+                            p.get_p_out()
+                            + 0.5 * self.rho * torch.square(p.get_u_out())
+                            - d1.get_p_in()
+                            - 0.5 * self.rho * torch.square(d1.get_u_in())
+                        )
+                    )
+                    loss_pressure += torch.mean(
+                        torch.square(
+                            p.get_p_out()
+                            + 0.5 * self.rho * torch.square(p.get_u_out())
+                            - d2.get_p_in()
+                            - 0.5 * self.rho * torch.square(d2.get_u_in())
+                        )
+                    )
         return loss_mass, loss_pressure
 
-    def compute_mesurement_loss(self):
+    def compute_mesurement_loss(self, batch_idx=None):
         """
         Function computes mesurement loss
         """
         loss = 0
-        for artery in self.arteries:
-            if artery.has_mesurement():
-                loss += nn.MSELoss()(
-                    artery.get_reconstructed_u_mesurement(),
-                    artery.get_true_mesurement(),
-                )
+        if batch_idx is not None:
+            for idx in batch_idx:
+                if self.arteries[idx].has_mesurement():
+                    loss += nn.MSELoss()(
+                        self.arteries[idx].get_reconstructed_u_mesurement(),
+                        self.arteries[idx].get_true_mesurement(),
+                    )
+        else:
+            for artery in self.arteries:
+                if artery.has_mesurement():
+                    loss += nn.MSELoss()(
+                        artery.get_reconstructed_u_mesurement(),
+                        artery.get_true_mesurement(),
+                    )
         return loss
 
     def compute_SV_loss(self):
@@ -738,3 +878,50 @@ class COW(object):
         Solving inverse proble one joint at a time and accumulating
         gradient
         """
+        iter = 0
+        for i in range(max_iters):
+            loss = 0
+            for joint in self.joints:
+                p, d1, d2, merging = joint
+                batch_idx = [int(p), int(d1), int(d2)]
+                self.solve_arteries(batch_size, batch_idx)
+                loss += lambda_reg * self.get_reg_loss(batch_size, batch_idx)
+                loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
+                loss += lambda_sv * self.compute_SV_loss()
+                loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
+                loss += lambda_bif * (loss_mass + loss_pressure)
+                loss = loss / len(self.joints)
+                loss.backward()
+            self.optimizer.zero_grad()
+            self.optimizer.step()
+            self.propagate_SV()
+            print(loss.item())
+
+            if self.track and iter % log_every == 0:
+                wandb.log(
+                    {
+                        "loss": loss.item(),
+                        "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
+                        "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
+                        "SV_loss": lambda_sv * self.compute_SV_loss(),
+                        "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
+                    }
+                )
+                self.log_arteries()
+                wandb.log(
+                    {
+                        "SV": self.SV.item(),
+                        "Validation loss": self.compute_validation_l2_loss(
+                            batch_size
+                        ).item(),
+                    },
+                )
+
+            if loss < eps:
+                break
+
+        validation_loss = self.compute_validation_l2_loss(batch_size)
+        wandb.log({"Validation loss": validation_loss.item()})
+
+        iter += 1
+        return validation_loss
