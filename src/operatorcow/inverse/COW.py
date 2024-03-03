@@ -391,12 +391,14 @@ class COW(object):
         p = []
         for artery in self.arteries:
             p.extend(artery.get_parameters())
+        print(self.SV.requires_grad_(True).is_leaf)
+        p.extend([self.SV.requires_grad_(True)])
         self.optimizer = torch.optim.Adam(p, lr=lr)
 
     def loader_GNOT(self, batch_size, batch_idx=None):
         # Loader dla gnota req loss mozna w jednym batchu?
         if batch_idx is not None:
-            batch_idx = batch_idx
+            batch_idx = [batch_idx]
         else:
             batch_idx = [
                 list(range(i, min(i + batch_size, len(self.arteries))))
@@ -426,8 +428,15 @@ class COW(object):
 
     def loader_AE(self, batch_size, batch_idx=None):
         # Loader dla AE # yield also indicies
+        if 0 in batch_idx:
+            batch_idx.remove(0)
+        elif 1 in batch_idx:
+            batch_idx.remove(1)
+        elif 2 in batch_idx:
+            batch_idx.remove(2)
+
         if batch_idx is not None:
-            batch_idx = batch_idx
+            batch_idx = [batch_idx]
         else:
             batch_idx = [
                 list(range(i, min(i + batch_size, len(self.arteries))))
@@ -471,7 +480,7 @@ class COW(object):
                     g, u_p, g_u
                 )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
                 out = self.normalizer_y.transform(out, inverse=True)
-                out = out.reshape(batch_size, -1, 3)  # mam nadzieje ze to dobrze
+                out = out.reshape(len(batch_idx), -1, 3)  # mam nadzieje ze to dobrze
 
                 # tu musi byc funkcja do zapisu wynikow do artery
                 # print(idx)
@@ -880,8 +889,10 @@ class COW(object):
         """
         iter = 0
         for i in range(max_iters):
-            loss = 0
+
             for joint in self.joints:
+                self.optimizer.zero_grad()
+                loss = 0
                 p, d1, d2, merging = joint
                 batch_idx = [int(p), int(d1), int(d2)]
                 self.solve_arteries(batch_size, batch_idx)
@@ -891,9 +902,10 @@ class COW(object):
                 loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
                 loss += lambda_bif * (loss_mass + loss_pressure)
                 loss = loss / len(self.joints)
+
                 loss.backward()
-            self.optimizer.zero_grad()
-            self.optimizer.step()
+
+                self.optimizer.step()
             self.propagate_SV()
             print(loss.item())
 
@@ -901,8 +913,8 @@ class COW(object):
                 wandb.log(
                     {
                         "loss": loss.item(),
-                        "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
-                        "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
+                        # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
+                        # "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
                         "SV_loss": lambda_sv * self.compute_SV_loss(),
                         "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
                     }
@@ -911,9 +923,9 @@ class COW(object):
                 wandb.log(
                     {
                         "SV": self.SV.item(),
-                        "Validation loss": self.compute_validation_l2_loss(
-                            batch_size
-                        ).item(),
+                        # "Validation loss": self.compute_validation_l2_loss(
+                        #     batch_size
+                        # ).item(),
                     },
                 )
 

@@ -609,3 +609,137 @@ def validate_epoch_AE(
     wandb.log({"AE_validation": tbl})
 
     return dict(metric=np.mean(metric_val, axis=0))
+
+
+def train_VANO(
+    model: nn.Module,
+    loss_func: nn.Module,
+    metric_func: nn.Module,
+    train_loader: MIODataLoader,
+    val_loader: MIODataLoader,
+    optimizer,
+    lr_scheduler,
+    epochs: int,
+    device: str,
+    grad_clip: float,
+    normalizer_y,
+    start_epoch: int = 0,
+    print_freq: int = 20,
+    model_save_path: str = "../../data/checkpoints/",
+    model_name: str = "VANO.pt",
+    result_name: str = "results.pt",
+):
+
+    it = 0
+    best_val_metric = np.inf
+
+    for epoch in range(epochs):
+        model.train()
+        torch.cuda.empty_cache()
+
+        for batch in train_loader:
+            loss = train_batch_VANO(
+                model=model,
+                loss_func=loss_func,
+                data=batch,
+                optimizer=optimizer,
+                lr_scheduler=lr_scheduler,
+                device=device,
+                grad_clip=grad_clip,
+            )
+            wandb.log(
+                {
+                    "MSEloss": loss,
+                    "lr": optimizer.param_groups[0]["lr"],
+                }
+            )
+            loss = np.array(loss)
+            it += 1
+            log = f"epoch: [{epoch +1}/{epochs}]"
+            log += f"loss: {loss:.4f}"
+
+            if it % print_freq == 0:
+                print(log)
+
+        val_result = validate_epoch_VANO(
+            model=model,
+            metric_func=metric_func,
+            valid_loader=val_loader,
+            device=device,
+            normalizer_y=normalizer_y,
+        )
+        wandb.log({"val_MSE_loss": val_result["metric"].mean()})
+
+        val_metric = val_result["metric"].sum()
+
+        if val_metric < best_val_metric:
+            best_val_metric = val_metric
+            best_val_epoch = epoch
+            torch.save(
+                model.state_dict(),
+                os.path.join(model_save_path, model_name),
+            )
+
+        return None
+
+
+def train_batch_VANO(
+    model: nn.Module,
+    loss_func: nn.Module,
+    data: list,
+    optimizer,
+    lr_scheduler,
+    device: str,
+    beta: float,
+    grad_clip: float,
+    S: int = 4,
+):
+    # S = num of samples for monte carlo approx
+
+    optimizer.zero_grad()
+    u_bc, condition = data
+
+    u_bc, condition = u_bc.to(device), condition.to(device)
+    mean, log_var, z, pred = model(u_bc, condition)
+    # ELBO = E_p(eps)[log p(x | z=g(eps, x))] - KL(q(z | x) || p(z))
+    # ----------------------------------------------------------------
+    # Reconstruction loss: E_Q(z|x)[1/2 ||D(z)||^2_L2 - <D(z), u>^~]
+    # Sample S values of z
+    #  condition = [bs, 11]
+
+    eps = torch.randn(S, *z.shape, device=z.device)
+    z_samples = mean.unsqueeze(0) + torch.exp(log_var / 2).unsqueeze(0) * eps
+
+    z_samples = z_samples.view(-1, z_samples.shape[-1])  # [S * batch, latent_dim]
+    condition = condition.repeat(S, 1, 1)  # [S , batch, 11]
+    condition = condition.view(-1, condition.shape[-1])  # [S * batch, 11]
+
+    pred = model.decode(z_samples, condition)  # need dim of condition itp
+
+    pred = pred.view(S, -1, pred.shape[-1])  # [S, batch, 100]
+
+    u_bc = u_bc.repeat(S, 1, 1)  # [S, batch, 100]
+
+    D_z_norm = 0.5 * torch.mean(pred.pow(2), dim=-1)  # [S, batch]
+
+    inner_prod = torch.sum(pred * u_bc, dim=-1)  # [S, batch]
+
+    reconstr_loss = torch.mean(D_z_norm - inner_prod, dim=0)  # [batch]
+
+    reconstr_loss = torch.mean(reconstr_loss)
+
+    # KL divergence
+    kl_div = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp(), dim=-1)
+    kl_div = torch.mean(kl_div)
+
+    loss = reconstr_loss + beta * kl_div
+
+    loss.backward()
+    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
+    optimizer.step()
+
+    if lr_scheduler:
+        lr_scheduler.step()
+
+    return loss.item()

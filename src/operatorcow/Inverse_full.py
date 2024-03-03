@@ -11,7 +11,7 @@ from inverse.COW import COW
 from log_plots import plot_predictions
 from models.ae import MLAE
 from models.cgpt import CGPT
-from models.mmgpt import GNOT
+from models.mmgpt import GNOT, GNOT_DISCRIMINATOR
 from models.optimizer import AdamW
 from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import OneCycleLR
@@ -19,7 +19,7 @@ from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2
 
-from operatorcow.inverse.inverse import optimize_input_test
+# from operatorcow.inverse.inverse import optimize_input_test
 
 logger = logging.getLogger(__name__)
 
@@ -218,7 +218,7 @@ def main(config: DictConfig) -> None:
         lambda_reg=config.inverse.lambda_reg,
         lambda_bif=config.inverse.lambda_bif,
         lambda_sv=config.inverse.lambda_sv,
-        lamda_mes=config.inverse.lamda_mes,
+        lambda_mes=config.inverse.lambda_mes,
         log_every=config.inverse.log_every,
     )
 
