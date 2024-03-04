@@ -67,3 +67,6 @@ class VANO(nn.Module):
 
         pred = self.decode(z, condition)
         return mean, log_var, z, pred
+
+    def get_latent_dim(self):
+        return self.latent_dim

@@ -623,6 +623,9 @@ def train_VANO(
     device: str,
     grad_clip: float,
     normalizer_y,
+    normalizer_up,
+    beta: float,
+    S: int = 4,
     start_epoch: int = 0,
     print_freq: int = 20,
     model_save_path: str = "../../data/checkpoints/",
@@ -638,7 +641,7 @@ def train_VANO(
         torch.cuda.empty_cache()
 
         for batch in train_loader:
-            loss = train_batch_VANO(
+            loss, rec, kl = train_batch_VANO(
                 model=model,
                 loss_func=loss_func,
                 data=batch,
@@ -646,10 +649,14 @@ def train_VANO(
                 lr_scheduler=lr_scheduler,
                 device=device,
                 grad_clip=grad_clip,
+                beta=beta,
+                S=S,
             )
             wandb.log(
                 {
-                    "MSEloss": loss,
+                    "Total_loss": loss.item(),
+                    "Reconstruction_loss": rec.item(),
+                    "KL_divergence": kl.item(),
                     "lr": optimizer.param_groups[0]["lr"],
                 }
             )
@@ -661,26 +668,24 @@ def train_VANO(
             if it % print_freq == 0:
                 print(log)
 
-        val_result = validate_epoch_VANO(
+            if loss.item() < best_val_metric:
+                best_val_metric = loss.item()
+                best_val_epoch = epoch
+                torch.save(
+                    model.state_dict(),
+                    os.path.join(model_save_path, model_name),
+                )
+
+        validate_epoch_VANO(
             model=model,
             metric_func=metric_func,
             valid_loader=val_loader,
             device=device,
             normalizer_y=normalizer_y,
+            normalizer_up=normalizer_up,
         )
-        wandb.log({"val_MSE_loss": val_result["metric"].mean()})
 
-        val_metric = val_result["metric"].sum()
-
-        if val_metric < best_val_metric:
-            best_val_metric = val_metric
-            best_val_epoch = epoch
-            torch.save(
-                model.state_dict(),
-                os.path.join(model_save_path, model_name),
-            )
-
-        return None
+    return None
 
 
 def train_batch_VANO(
@@ -698,6 +703,7 @@ def train_batch_VANO(
 
     optimizer.zero_grad()
     u_bc, condition = data
+    u_bc = u_bc.ndata["y"].squeeze().reshape(condition.shape[0], -1)
 
     u_bc, condition = u_bc.to(device), condition.to(device)
     mean, log_var, z, pred = model(u_bc, condition)
@@ -742,4 +748,72 @@ def train_batch_VANO(
     if lr_scheduler:
         lr_scheduler.step()
 
-    return loss.item()
+    return (loss.item(), reconstr_loss.item(), kl_div.item())
+
+
+def validate_epoch_VANO(
+    model: nn.Module,
+    metric_func: nn.Module,
+    valid_loader: MIODataLoader,
+    device: str,
+    normalizer_y,
+    normalizer_up,
+):
+    model.eval()
+    arteries = [
+        "VA",
+        "ICA_1",
+        "BA",
+        "MCA",
+        "ACA_A1",
+        "ACA_A2",
+        "PCA_P1",
+        "PCA_P2",
+        "PCOA",
+        "ACOA",
+        "ICA_2",
+    ]
+    tbl = wandb.Table(
+        columns=["Artery", "MFV_mean", "MFV_std", "PI_mean", "PI_std", "Sample"]
+    )
+    for artery in arteries:
+        artery_one_hot = encode_artery(artery)
+        condition = (
+            torch.from_numpy(artery_one_hot)
+            .float()
+            .to(device)
+            .unsqueeze(0)
+            .repeat(8, 1)
+        )  # [8, 11] zmienic na batch_size? czy po chuju?
+        # normalize
+        u_p = normalizer_up.transform(
+            u_p, inverse=False
+        )  # nie bedziemy normalizowac one hot
+
+        MFV, PI = None, None
+        for i in range(10):
+            z = torch.randn(8, model.get_latent_dim()).to(device)
+
+            synthetic = model.decode(z, condition)
+            synthetic = synthetic.reshape(8, 100, 1)  # (8, 100, 1)
+            # Need to denormalize and compute statistics
+            synthetic = normalizer_y.transform(synthetic, inverse=True)
+            if MFV is None:
+                MFV, PI = compute_statistics(synthetic)
+            else:
+                MFV_new, PI_new = compute_statistics(synthetic)
+                MFV = torch.cat((MFV, MFV_new), dim=0)
+                PI = torch.cat((PI, PI_new), dim=0)
+        MFV_mean, MFV_std = torch.mean(MFV, dim=0), torch.std(MFV, dim=0)
+        PI_mean, PI_std = torch.mean(PI, dim=0), torch.std(PI, dim=0)
+        tbl.add_data(
+            artery,
+            MFV_mean.item(),
+            MFV_std.item(),
+            PI_mean.item(),
+            PI_std.item(),
+            wandb.Image(plot_generated(synthetic)),
+        )
+    wandb.log({"Generated_distribution_statistics": tbl})
+
+    # policzyc reconstruction error
