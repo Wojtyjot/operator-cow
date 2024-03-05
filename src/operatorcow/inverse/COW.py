@@ -40,6 +40,8 @@ class Artery(object):
         device: str,
         mesurement: bool = False,
         root: bool = False,
+        VANO: bool = True,
+        normalizer_u_bc=None,
     ):
         self.name = name
         self.g = g
@@ -49,6 +51,9 @@ class Artery(object):
         self.L = g.ndata["x"][-1, 0]
         self.root = root
         self.mesurement = mesurement
+        self.VANO = VANO
+        if normalizer_u_bc is not None:
+            self.normalizer_u_bc = normalizer_u_bc
         self.initialize_parameters(mesurement)
 
         # del self.g.ndata['y']
@@ -59,37 +64,77 @@ class Artery(object):
 
         for now, measurement is assumed to be in the middle of the artery
         """
-        if measurement:
-            self.u_bc = (
-                self.g.ndata["y"][100 * 100 : 100 * 101, 2]
-                .unsqueeze(-1)
-                .to(self.device)
-                .requires_grad_(True)
-            )
-            print(self.u_bc.shape)
-            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
-            self.mesurement_value = (
-                self.g.ndata["y"][100 * 100 : 100 * 101, 2].squeeze().to(self.device)
-            )
-            self.parameters = [self.u_bc, u0]
-            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+        if self.VANO:
+            if measurement:
 
-        elif self.root:
-            self.u_bc = (
-                self.g.ndata["y"][0:100, 2]
-                .unsqueeze(-1)
-                .to(self.device)
-                .requires_grad_(True)
-            )
-            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
-            self.parameters = [u0]
-            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+                self.u_bc_latent = (
+                    torch.randn(1, 16).to(self.device).requires_grad_(True)
+                )
+                # print(self.u_bc.shape)
+                # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.mesurement_value = (
+                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
+                    .squeeze()
+                    .to(self.device)
+                )
+                self.parameters = [self.u_bc_latent]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+
+            elif self.root:
+                self.u_bc = (
+                    self.g.ndata["y"][0:100, 2]
+                    .unsqueeze(-1)
+                    .to(self.device)
+                    .requires_grad_(True)
+                )
+                # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                # self.parameters = [u0]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+                self.parameters = None
+
+            else:
+                self.u_bc_latent = (
+                    torch.randn(1, 16).to(self.device).requires_grad_(True)
+                )
+                # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.parameters = [self.u_bc_latent]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
         else:
-            self.u_bc = torch.rand(100, 1).to(self.device).requires_grad_(True)
-            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
-            self.parameters = [self.u_bc, u0]
-            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+
+            if measurement:
+                self.u_bc = (
+                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
+                    .unsqueeze(-1)
+                    .to(self.device)
+                    .requires_grad_(True)
+                )
+                print(self.u_bc.shape)
+                u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.mesurement_value = (
+                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
+                    .squeeze()
+                    .to(self.device)
+                )
+                self.parameters = [self.u_bc, u0]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+
+            elif self.root:
+                self.u_bc = (
+                    self.g.ndata["y"][0:100, 2]
+                    .unsqueeze(-1)
+                    .to(self.device)
+                    .requires_grad_(True)
+                )
+                u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.parameters = [u0]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+
+            else:
+                self.u_bc = torch.rand(100, 1).to(self.device).requires_grad_(True)
+                u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.parameters = [self.u_bc, u0]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
     def get_parameters(self):
         """
@@ -98,17 +143,30 @@ class Artery(object):
         """
         return self.parameters
 
-    def get_u_BC(self):
+    def get_u_BC(self, VANO_model: nn.Module = None, normalizer_u_bc=None):
         """
         Function return boundary condition
         """
         t = torch.linspace(0, 1, 100).to(self.device).reshape(-1, 1)
         x = torch.zeros(100, 1).to(self.device).reshape(-1, 1)
+        if self.VANO:
+            if self.root:
+                return torch.cat((x, t, self.u_bc.reshape(-1, 1)), dim=-1)
+            else:
+                # need to doceode u_bc and then renormalize
+                u_bc = VANO_model.decode(
+                    self.parameters[0].reshape(1, 16), self.theta[:11].reshape(1, 11)
+                )
+                u_bc = normalizer_u_bc.transform(u_bc, inverse=True)
+                return torch.cat((x, t, u_bc.reshape(-1, 1)), dim=-1)
+                # return torch.cat((x, t, self.parameters[0].reshape(-1, 1)), dim=-1)
 
-        if self.root:
-            return torch.cat((x, t, self.u_bc.reshape(-1, 1)), dim=-1)
         else:
-            return torch.cat((x, t, self.parameters[0].reshape(-1, 1)), dim=-1)
+            if self.root:
+                return torch.cat((x, t, self.u_bc.reshape(-1, 1)), dim=-1)
+            else:
+
+                return torch.cat((x, t, self.parameters[0].reshape(-1, 1)), dim=-1)
 
     def get_u0(self):
         """
@@ -122,14 +180,18 @@ class Artery(object):
         else:
             return torch.cat((x, t, self.parameters[1]), dim=-1)
 
-    def get_inputs(self, model: str):
+    def get_inputs(
+        self, model: str, VANO_model: nn.Module = None, normalizer_u_bc=None
+    ):
         """
         Function return inputs to model
         """
         if model == "GNOT":
-            p0, a0 = self.inputs_f[1], self.inputs_f[3]
-            u0 = self.get_u0()
-            in_bc = self.get_u_BC()
+            p0, u0, a0 = self.inputs_f[1], self.inputs[2], self.inputs_f[3]
+            # u0 = self.get_u0()
+            in_bc = self.get_u_BC(
+                VANO_model=VANO_model, normalizer_u_bc=normalizer_u_bc
+            )
             in_f = MultipleTensors([i for i in (in_bc, p0, u0, a0)])
 
             return self.g, torch.cat((self.theta.to(self.device), self.SV)), in_f
@@ -230,18 +292,25 @@ class COW(object):
         normalizer_theta,
         joints_path: str,
         lr: float,
+        VANO: bool,
+        model_VANO: nn.Module,
+        normalizer_u_bc=None,
     ):
         self.rho = 1.06  ## must be in CGS units
         self.SV_true = None
         self.SV = (
             torch.Tensor([np.random.uniform(70, 140)]).to(device).requires_grad_(True)
         )
+        self.VANO = VANO
         self.device = device
         self.model_surrogate = model_surrogate
         self.AE_model = AE_model
+        self.model_VANO = model_VANO
         self.track = track
         self.normalizer_x = normalizer_x
         self.normalizer_y = normalizer_y
+        if normalizer_u_bc is not None:
+            self.normalizer_u_bc = normalizer_u_bc
         self.normalizer_theta = normalizer_theta
         self.joints_path = joints_path  # TODO
         self.l2_loss = WeightedLpRelLoss(p=2, component="all", normalizer=None)
@@ -315,6 +384,7 @@ class COW(object):
                         device=self.device,
                         root=True,
                         mesurement=False,
+                        VANO=self.VANO,
                     )
                 )
             elif artery in [
@@ -337,6 +407,7 @@ class COW(object):
                         name=artery,
                         device=self.device,
                         mesurement=True,
+                        VANO=self.VANO,
                     )
                 )
 
@@ -349,6 +420,7 @@ class COW(object):
                         name=artery,
                         device=self.device,
                         mesurement=False,
+                        VANO=self.VANO,
                     )
                 )  # Theta in arteries is without SV
 
@@ -390,8 +462,9 @@ class COW(object):
         # TODO test z LBFGS tylko colsure trzeba zdefiniowac
         p = []
         for artery in self.arteries:
-            p.extend(artery.get_parameters())
-        print(self.SV.requires_grad_(True).is_leaf)
+            if artery.get_parameters() is not None:
+                p.extend(artery.get_parameters())
+        # print(self.SV.requires_grad_(True).is_leaf)
         p.extend([self.SV.requires_grad_(True)])
         self.optimizer = torch.optim.Adam(p, lr=lr)
 
@@ -793,7 +866,9 @@ class COW(object):
 
     def get_arteries(self, idx, model: str = "GNOT"):
         try:
-            return self.arteries[idx].get_inputs(model)
+            return self.arteries[idx].get_inputs(
+                model, self.model_VANO, self.normalizer_u_bc
+            )
         except ValueError:
             pass
 
