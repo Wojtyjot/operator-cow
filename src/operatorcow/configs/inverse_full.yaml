@@ -24,8 +24,10 @@ wandb:
     - development
 
 data:
-  path: /data/path/placeholder
-  batch_size: 32
+  data_path: /content/drive/MyDrive/operator-cow/data/inverse/
+  joints_path: /content/drive/MyDrive/operator-cow/data/inverse/joints.csv
+  batch_size: 4
+
 
 log: False
 
@@ -47,9 +49,14 @@ model:
   attn_dropout: 0.0
   horiz_fourier_dim: 0
   AE_weights_path: /data/path/placeholder
-  surrogate_weights_path: /data/path/placeholder
+  surrogate_weights_path: /content/drive/MyDrive/Model_archive/GNOT_BABY_96_3mln_EPOCH_50_100.pt
+  VANO_weights_path: /content/drive/MyDrive/operator-cow/data/checkpoints/VANO.pt
   ae:
     layers: [100, 128, 256, 128, 32]
+  VANO:
+    layers_encoder: [111, 256, 256,256,256,256, 32]
+    layers_decoder: [27, 256, 256,256,256,256, 100]
+    latent_dim: 16
 
 inverse:
   lambda_reg: 0.01
