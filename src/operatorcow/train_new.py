@@ -654,9 +654,9 @@ def train_VANO(
             )
             wandb.log(
                 {
-                    "Total_loss": loss.item(),
-                    "Reconstruction_loss": rec.item(),
-                    "KL_divergence": kl.item(),
+                    "Total_loss": loss,
+                    "Reconstruction_loss": rec,
+                    "KL_divergence": kl,
                     "lr": optimizer.param_groups[0]["lr"],
                 }
             )
@@ -726,11 +726,11 @@ def train_batch_VANO(
 
     u_bc = u_bc.repeat(S, 1, 1)  # [S, batch, 100]
 
-    D_z_norm = 0.5 * torch.mean(pred.pow(2), dim=-1)  # [S, batch]
+    D_z_norm = 0.5 * pred.pow(2)  # [S, batch]
 
-    inner_prod = torch.sum(pred * u_bc, dim=-1)  # [S, batch]
+    inner_prod = pred * u_bc  # [S, batch]
 
-    reconstr_loss = torch.mean(D_z_norm - inner_prod, dim=0)  # [batch]
+    reconstr_loss = torch.mean(D_z_norm - inner_prod, dim=0).mean(0)  # [batch]
 
     reconstr_loss = torch.mean(reconstr_loss)
 
@@ -786,8 +786,8 @@ def validate_epoch_VANO(
             .repeat(8, 1)
         )  # [8, 11] zmienic na batch_size? czy po chuju?
         # normalize
-        u_p = normalizer_up.transform(
-            u_p, inverse=False
+        condition = normalizer_up.transform(
+            condition, inverse=False
         )  # nie bedziemy normalizowac one hot
 
         MFV, PI = None, None

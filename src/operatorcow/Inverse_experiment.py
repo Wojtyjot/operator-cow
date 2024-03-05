@@ -7,17 +7,17 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
+from inverse import optimize_input_test_VANO
 from log_plots import plot_predictions
 from models.ae import MLAE
 from models.cgpt import CGPT
 from models.mmgpt import GNOT
 from models.optimizer import AdamW
+from models.VANO import VANO
 from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
-
-from operatorcow.inverse.inverse import optimize_input_test
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,7 @@ def main(config: DictConfig) -> None:
     # save normalizer to renormalize data for plotting and evaluation
     normalizer = dataset.y_normalizer.to(device)
     normalizer_up = dataset.up_normalizer.to(device)
+    normalizer_x = dataset.x_normalizer.to(device)
 
     test_loader = MIODataLoader(
         test_data,
@@ -77,31 +78,47 @@ def main(config: DictConfig) -> None:
         attn_dropout=config.model.attn_dropout,
         horiz_fourier_dim=config.model.horiz_fourier_dim,
     )
-    AE_model = MLAE(
-        layers=config.model.ae.layers,
+    # AE_model = MLAE(
+    #    layers=config.model.ae.layers,
+    # )
+    VANO_model = VANO(
+        layers_encoder=config.model.VANO.layers_encoder,
+        layers_decoder=config.model.VANO.layers_decoder,
+        latent_dim=config.model.VANO.latent_dim,
     )
-
     # Load model weights
     model_surrogate = model_surrogate.to(device)
-    AE_model = AE_model.to(device)
+    # AE_model = AE_model.to(device)
+    VANO_model = VANO_model.to(device)
 
     model_surrogate.load_state_dict(torch.load(config.model.surrogate_weights_path))
-    AE_model.load_state_dict(torch.load(config.model.AE_weights_path))
-
+    # AE_model.load_state_dict(torch.load(config.model.AE_weights_path))
+    VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
     # get data
-    g, inputs_f, theta = test_data[2137]
-    g = g.to(device)
+    g, theta, inputs_f = test_data[5]
+    g, theta, inputs_f = g.to(device), theta.to(device), inputs_f.to(device)
 
     # optimize input
-    u_bc, SV_rec, out, true_in_bc, SV_true = optimize_input_test(
-        model_surrogate,
-        AE_model,
-        g,
-        inputs_f,
-        theta,
-        config.inverse.lambda_reg,
-        config.inverse.max_steps,
-        device,
+    # evaluate whole domain
+    metric = WeightedLpRelLoss(
+        p=2,
+        component="all",
+        normalizer=normalizer,
+    )
+
+    u_bc, SV_rec, out, true_in_bc, SV_true = optimize_input_test_VANO(
+        model_surrogate=model_surrogate,
+        VANO_model=VANO_model,
+        g=g,
+        inputs_f=inputs_f,
+        theta=theta,
+        lambda_reg=config.inverse.lambda_reg,
+        max_steps=config.inverse.max_steps,
+        device=device,
+        normalizer_up=normalizer_up,
+        normalizer_y=normalizer,
+        normalizer_x=normalizer_x,
+        metric=metric,
     )
 
     # evaluate whole domain
@@ -113,17 +130,20 @@ def main(config: DictConfig) -> None:
 
     loss_whole_domain, _, _ = metric(g, out, g.ndata["y"].squeeze())
 
-    # Need to log plots in table
-    plot_predictions(out, g.ndata["y"].squeeze(), "2137")
+    print(f"L2 loss whole = {loss_whole_domain.item()}")
 
-    tbl = wandb.Table(collumns=["BC_true", "BC_pred", "SV_true", "SV_pred", "Loss"])
+    # Need to log plots in table
+    plot_predictions(
+        out.detach().cpu().numpy(), g.ndata["y"].squeeze().detach().cpu().numpy(), "3"
+    )
+
+    tbl = wandb.Table(columns=["SV_true", "SV_pred", "Loss"])
     tbl.add_data(
-        wandb.Image(plt.plot(u_bc, label="BC_true")),
-        wandb.Image(plt.plot(true_in_bc[:, -1], label="BC_pred")),
         SV_true,
         SV_rec,
         loss_whole_domain.item(),
     )
+    wandb.log({"Rec_params": tbl})
 
 
 if __name__ == "__main__":
