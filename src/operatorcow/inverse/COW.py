@@ -1,3 +1,4 @@
+import gc
 from pathlib import Path
 from typing import *
 
@@ -9,6 +10,7 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import WeightedLpRelLoss
+from log_plots import plot_predictions
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
 
@@ -40,15 +42,23 @@ class Artery(object):
         device: str,
         mesurement: bool = False,
         root: bool = False,
+        VANO: bool = True,
+        normalizer_u_bc=None,
+        condition=None,
     ):
         self.name = name
         self.g = g
         self.device = device
-        self.theta = theta
+        self.theta = theta  # NIE JEST ZNORMALIZOWANE !
         self.inputs_f = inputs_f
         self.L = g.ndata["x"][-1, 0]
         self.root = root
         self.mesurement = mesurement
+        self.VANO = VANO
+        self.condition = condition
+        if normalizer_u_bc is not None:
+            self.normalizer_u_bc = normalizer_u_bc
+        self.a0 = None
         self.initialize_parameters(mesurement)
 
         # del self.g.ndata['y']
@@ -59,37 +69,80 @@ class Artery(object):
 
         for now, measurement is assumed to be in the middle of the artery
         """
-        if measurement:
-            self.u_bc = (
-                self.g.ndata["y"][100 * 100 : 100 * 101, 2]
-                .unsqueeze(-1)
-                .to(self.device)
-                .requires_grad_(True)
-            )
-            print(self.u_bc.shape)
-            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
-            self.mesurement_value = (
-                self.g.ndata["y"][100 * 100 : 100 * 101, 2].squeeze().to(self.device)
-            )
-            self.parameters = [self.u_bc, u0]
-            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+        if self.VANO:
+            if measurement:
 
-        elif self.root:
-            self.u_bc = (
-                self.g.ndata["y"][0:100, 2]
-                .unsqueeze(-1)
-                .to(self.device)
-                .requires_grad_(True)
-            )
-            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
-            self.parameters = [u0]
-            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+                self.u_bc_latent = (
+                    torch.randn(1, 32).to(self.device).requires_grad_(True)
+                )
+                # print(self.u_bc.shape)
+                # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.mesurement_value = (
+                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
+                    .squeeze()
+                    .to(self.device)
+                )
+                self.parameters = [self.u_bc_latent]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+                self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+
+            elif self.root:
+                self.u_bc = (
+                    self.g.ndata["y"][0:100, 2]
+                    .unsqueeze(-1)
+                    .to(self.device)
+                    .requires_grad_(True)
+                )
+                # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                # self.parameters = [u0]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+                self.parameters = None
+                self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+
+            else:
+                self.u_bc_latent = (
+                    torch.randn(1, 32).to(self.device).requires_grad_(True)
+                )
+                # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.parameters = [self.u_bc_latent]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+                self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
 
         else:
-            self.u_bc = torch.rand(100, 1).to(self.device).requires_grad_(True)
-            u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
-            self.parameters = [self.u_bc, u0]
-            self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+
+            if measurement:
+                self.u_bc = (
+                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
+                    .unsqueeze(-1)
+                    .to(self.device)
+                    .requires_grad_(True)
+                )
+                print(self.u_bc.shape)
+                u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.mesurement_value = (
+                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
+                    .squeeze()
+                    .to(self.device)
+                )
+                self.parameters = [self.u_bc, u0]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+
+            elif self.root:
+                self.u_bc = (
+                    self.g.ndata["y"][0:100, 2]
+                    .unsqueeze(-1)
+                    .to(self.device)
+                    .requires_grad_(True)
+                )
+                u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.parameters = [u0]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+
+            else:
+                self.u_bc = torch.rand(100, 1).to(self.device).requires_grad_(True)
+                u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                self.parameters = [self.u_bc, u0]
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
     def get_parameters(self):
         """
@@ -98,17 +151,33 @@ class Artery(object):
         """
         return self.parameters
 
-    def get_u_BC(self):
+    def get_u_BC(self, VANO_model: nn.Module = None, normalizer_u_bc=None):
         """
         Function return boundary condition
         """
         t = torch.linspace(0, 1, 100).to(self.device).reshape(-1, 1)
         x = torch.zeros(100, 1).to(self.device).reshape(-1, 1)
+        if self.VANO:
+            if self.root:
+                self.u_bc_rec = self.u_bc
+                return torch.cat((x, t, self.u_bc.reshape(-1, 1)), dim=-1)
+            else:
+                # need to doceode u_bc and then renormalize
+                u_bc = VANO_model.decode(
+                    self.parameters[0].reshape(1, 32),
+                    self.condition.reshape(1, 11).to(self.device),
+                )
+                u_bc = normalizer_u_bc.transform(u_bc, inverse=True)
+                self.u_bc_rec = u_bc.reshape(-1, 1)
+                return torch.cat((x, t, u_bc.reshape(-1, 1)), dim=-1)
+                # return torch.cat((x, t, self.parameters[0].reshape(-1, 1)), dim=-1)
 
-        if self.root:
-            return torch.cat((x, t, self.u_bc.reshape(-1, 1)), dim=-1)
         else:
-            return torch.cat((x, t, self.parameters[0].reshape(-1, 1)), dim=-1)
+            if self.root:
+                return torch.cat((x, t, self.u_bc.reshape(-1, 1)), dim=-1)
+            else:
+
+                return torch.cat((x, t, self.parameters[0].reshape(-1, 1)), dim=-1)
 
     def get_u0(self):
         """
@@ -122,14 +191,18 @@ class Artery(object):
         else:
             return torch.cat((x, t, self.parameters[1]), dim=-1)
 
-    def get_inputs(self, model: str):
+    def get_inputs(
+        self, model: str, VANO_model: nn.Module = None, normalizer_u_bc=None
+    ):
         """
         Function return inputs to model
         """
         if model == "GNOT":
-            p0, a0 = self.inputs_f[1], self.inputs_f[3]
-            u0 = self.get_u0()
-            in_bc = self.get_u_BC()
+            p0, u0, a0 = self.inputs_f[1], self.inputs_f[2], self.inputs_f[3]
+            # u0 = self.get_u0()
+            in_bc = self.get_u_BC(
+                VANO_model=VANO_model, normalizer_u_bc=normalizer_u_bc
+            )
             in_f = MultipleTensors([i for i in (in_bc, p0, u0, a0)])
 
             return self.g, torch.cat((self.theta.to(self.device), self.SV)), in_f
@@ -149,7 +222,7 @@ class Artery(object):
         u_bc as plot
         """
 
-        plt.plot(self.u_bc.detach().cpu().numpy(), label="reconstructed")
+        plt.plot(self.u_bc_rec.detach().cpu().numpy(), label="reconstructed")
         plt.plot(self.u_bc_true.detach().cpu().numpy(), label="true")
         plt.title(f"U_bc for artery {self.name}")
         plt.legend()
@@ -207,6 +280,15 @@ class Artery(object):
     def get_true_mesurement(self):
         return self.mesurement_value
 
+    def get_a0(self):
+        return self.a0
+
+    def set_a0_rec(self, a0_rec):
+        self.a0_rec = a0_rec
+
+    def get_a0_rec(self):
+        return self.a0_rec
+
 
 class COW(object):
     """
@@ -230,18 +312,25 @@ class COW(object):
         normalizer_theta,
         joints_path: str,
         lr: float,
+        VANO: bool,
+        model_VANO: nn.Module,
+        normalizer_u_bc=None,
     ):
         self.rho = 1.06  ## must be in CGS units
         self.SV_true = None
         self.SV = (
             torch.Tensor([np.random.uniform(70, 140)]).to(device).requires_grad_(True)
         )
+        self.VANO = VANO
         self.device = device
         self.model_surrogate = model_surrogate
         self.AE_model = AE_model
+        self.model_VANO = model_VANO
         self.track = track
         self.normalizer_x = normalizer_x
         self.normalizer_y = normalizer_y
+        if normalizer_u_bc is not None:
+            self.normalizer_u_bc = normalizer_u_bc
         self.normalizer_theta = normalizer_theta
         self.joints_path = joints_path  # TODO
         self.l2_loss = WeightedLpRelLoss(p=2, component="all", normalizer=None)
@@ -302,6 +391,10 @@ class COW(object):
             # y potrzebny tlko do "pomiarów" bedzie lepiej pamięciowo
             # trzeba pamietac by usunac SV i dodawac z cow
             theta = torch.from_numpy(theta).float()
+            condition = self.normalizer_theta.transform(
+                theta.to(self.device), inverse=False
+            )
+            condition = condition[:, :11]
             # passing also true values for comparison
             input_f = [torch.from_numpy(in_func).float() for in_func in in_funcs]
             # moze na poczatek zrobic hardcoded mesurements?
@@ -315,6 +408,8 @@ class COW(object):
                         device=self.device,
                         root=True,
                         mesurement=False,
+                        VANO=self.VANO,
+                        condition=condition,
                     )
                 )
             elif artery in [
@@ -337,6 +432,8 @@ class COW(object):
                         name=artery,
                         device=self.device,
                         mesurement=True,
+                        VANO=self.VANO,
+                        condition=condition,
                     )
                 )
 
@@ -349,6 +446,8 @@ class COW(object):
                         name=artery,
                         device=self.device,
                         mesurement=False,
+                        VANO=self.VANO,
+                        condition=condition,
                     )
                 )  # Theta in arteries is without SV
 
@@ -389,11 +488,26 @@ class COW(object):
         """
         # TODO test z LBFGS tylko colsure trzeba zdefiniowac
         p = []
+        p2 = []
+        p3 = []
         for artery in self.arteries:
-            p.extend(artery.get_parameters())
-        print(self.SV.requires_grad_(True).is_leaf)
+            if artery.get_parameters() is not None and artery.has_mesurement():
+                p.extend(artery.get_parameters())
+            elif artery.get_parameters() is not None and not artery.has_mesurement():
+                p2.extend(artery.get_parameters())
+
+            if artery.get_parameters() is not None:
+                p3.extend(artery.get_parameters())
+        # print(self.SV.requires_grad_(True).is_leaf)
         p.extend([self.SV.requires_grad_(True)])
-        self.optimizer = torch.optim.Adam(p, lr=lr)
+        p2.extend([self.SV.requires_grad_(True)])
+        p3.extend([self.SV.requires_grad_(True)])
+        print(len(p))
+        print(len(p2))
+        print(len(p3))
+        self.optimizer_mes = torch.optim.Adam(p, lr=lr)
+        self.optimizer_non_mes = torch.optim.Adam(p2, lr=lr)
+        self.optimizer_full = torch.optim.Adam(p3, lr=lr)
 
     def loader_GNOT(self, batch_size, batch_idx=None):
         # Loader dla gnota req loss mozna w jednym batchu?
@@ -518,19 +632,38 @@ class COW(object):
         """
         loss = 0
         i = 0
-        for batch, idx in self.loader_GNOT(batch_size):
-            i += 1
-            g, u_p, g_u = batch
+        with torch.no_grad():
+            for batch, idx in self.loader_GNOT(batch_size):
+                i += 1
+                g, u_p, g_u = batch
+                g, u_p, g_u = (
+                    g.to(self.device),
+                    u_p.to(self.device),
+                    g_u.to(self.device),
+                )
 
-            g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
-            u_p = self.normalizer_theta.transform(u_p, inverse=False)
+                g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
+                u_p = self.normalizer_theta.transform(u_p, inverse=False)
 
-            g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
+                g, u_p, g_u = (
+                    g.to(self.device),
+                    u_p.to(self.device),
+                    g_u.to(self.device),
+                )
 
-            out = self.model_surrogate(g, u_p, g_u)
-            out = self.normalizer_y.transform(out, inverse=True)
-            y_true = g.ndata["y"].squeeze().to(self.device)
-            loss += self.l2_loss(g, out, y_true)
+                out = self.model_surrogate(g, u_p, g_u)
+                out = self.normalizer_y.transform(out, inverse=True)
+                y_true = g.ndata["y"].squeeze().to(self.device)
+                los_, _, _ = self.l2_loss(g, out, y_true)
+                loss += los_.item()
+                out = out.reshape(len(idx), -1, 3)
+                y_true = y_true.reshape(len(idx), -1, 3)
+                for index, j in enumerate(idx):
+                    plot_predictions(
+                        out[index, :, :].detach().cpu().numpy(),
+                        y_true[index, :, :].detach().cpu().numpy(),
+                        str(j),
+                    )
         return loss / i
 
     def get_reg_loss(
@@ -622,6 +755,7 @@ class COW(object):
 
         conservation of mass and total pressure cont
         """
+        # TODO dodać weight to joints
         loss_mass = 0
         loss_pressure = 0
         if j is not None:
@@ -637,22 +771,40 @@ class COW(object):
                         - d2.get_u_out() * d2.get_a_out()
                     )
                 )
-                loss_pressure += torch.mean(
-                    torch.square(
-                        p.get_p_in()
-                        + 0.5 * self.rho * torch.square(p.get_u_in())
-                        - d1.get_p_out()
-                        - 0.5 * self.rho * torch.square(d1.get_u_out())
-                    )
+                p1 = self.compute_beta(r0=torch.sqrt(p.get_a_in() / torch.pi)) * (
+                    torch.sqrt(p.get_a_in()) - torch.sqrt(p.get_a_in()[0])
                 )
-                loss_pressure += torch.mean(
-                    torch.square(
-                        p.get_p_in()
-                        + 0.5 * self.rho * torch.square(p.get_u_in())
-                        - d2.get_p_out()
-                        - 0.5 * self.rho * torch.square(d2.get_u_out())
-                    )
+                pd1 = self.compute_beta(r0=torch.sqrt(d1.get_a_out() / torch.pi)) * (
+                    torch.sqrt(d1.get_a_out()) - torch.sqrt(d1.get_a_out()[0])
                 )
+                pd2 = self.compute_beta(r0=torch.sqrt(d2.get_a_out() / torch.pi)) * (
+                    torch.sqrt(d2.get_a_out()) - torch.sqrt(d2.get_a_out()[0])
+                )
+
+                # loss_pressure += torch.mean(
+                #    torch.square(
+                #        p.get_p_in()
+                #        + 0.5 * self.rho * torch.square(p.get_u_in())
+                #        - d1.get_p_out()
+                #        - 0.5 * self.rho * torch.square(d1.get_u_out())
+                #    )
+                # )
+                # loss_pressure += torch.mean(
+                #    torch.square(
+                #        p.get_p_in()
+                #        + 0.5 * self.rho * torch.square(p.get_u_in())
+                #        - d2.get_p_out()
+                #        - 0.5 * self.rho * torch.square(d2.get_u_out())
+                #    )
+                # )
+                p1 = p.get_p_in()
+                pd1 = d1.get_p_out()
+                pd2 = d2.get_p_out()
+                loss_pressure += torch.mean(torch.square(p1 - pd1)) + torch.mean(
+                    torch.square(p1 - pd2)
+                )
+
+                # loss_pressure += torch.mean(torch.square(p1 - (pd1 + pd2)))
             else:
                 loss_mass += torch.mean(
                     torch.square(
@@ -661,21 +813,31 @@ class COW(object):
                         - d2.get_u_in() * d2.get_a_in()
                     )
                 )
-                loss_pressure += torch.mean(
-                    torch.square(
-                        p.get_p_out()
-                        + 0.5 * self.rho * torch.square(p.get_u_out())
-                        - d1.get_p_in()
-                        - 0.5 * self.rho * torch.square(d1.get_u_in())
-                    )
-                )
-                loss_pressure += torch.mean(
-                    torch.square(
-                        p.get_p_out()
-                        + 0.5 * self.rho * torch.square(p.get_u_out())
-                        - d2.get_p_in()
-                        - 0.5 * self.rho * torch.square(d2.get_u_in())
-                    )
+                # p1 = self.compute_beta(r0 = torch.sqrt(p.get_a_out()/torch.pi))*(torch.sqrt(p.get_a_out()) - torch.sqrt(p.get_a_out()[0]))
+                # pd1 = self.compute_beta(r0 = torch.sqrt(d1.get_a_in()/torch.pi))*(torch.sqrt(d1.get_a_in()) - torch.sqrt(d1.get_a_in()[0]))
+                # pd2 = self.compute_beta(r0 = torch.sqrt(d2.get_a_in()/torch.pi))*(torch.sqrt(d2.get_a_in()) - torch.sqrt(d2.get_a_in()[0]))
+
+                # loss_pressure += torch.mean(
+                #    torch.square(
+                #        p.get_p_out()
+                #        + 0.5 * self.rho * torch.square(p.get_u_out())
+                #        - d1.get_p_in()
+                #        - 0.5 * self.rho * torch.square(d1.get_u_in())
+                #    )
+                # )
+                # loss_pressure += torch.mean(
+                #    torch.square(
+                #        p.get_p_out()
+                #        + 0.5 * self.rho * torch.square(p.get_u_out())
+                #        - d2.get_p_in()
+                #        - 0.5 * self.rho * torch.square(d2.get_u_in())
+                #    )
+                # )
+                p1 = p.get_p_out()
+                pd1 = d1.get_p_in()
+                pd2 = d2.get_p_in()
+                loss_pressure += torch.mean(torch.square(p1 - pd1)) + torch.mean(
+                    torch.square(p1 - pd2)
                 )
 
         else:
@@ -692,21 +854,31 @@ class COW(object):
                             - d2.get_u_out() * d2.get_a_out()
                         )
                     )
-                    loss_pressure += torch.mean(
-                        torch.square(
-                            p.get_p_in()
-                            + 0.5 * self.rho * torch.square(p.get_u_in())
-                            - d1.get_p_out()
-                            - 0.5 * self.rho * torch.square(d1.get_u_out())
-                        )
-                    )
-                    loss_pressure += torch.mean(
-                        torch.square(
-                            p.get_p_in()
-                            + 0.5 * self.rho * torch.square(p.get_u_in())
-                            - d2.get_p_out()
-                            - 0.5 * self.rho * torch.square(d2.get_u_out())
-                        )
+                    # p1 = self.compute_beta(r0 = torch.sqrt(p.get_a_in()/torch.pi))*(torch.sqrt(p.get_a_in()) - torch.sqrt(p.get_a_in()[0,:]))
+                    # pd1 = self.compute_beta(r0 = torch.sqrt(d1.get_a_out()/torch.pi))*(torch.sqrt(d1.get_a_out()) - torch.sqrt(d1.get_a_out()[0,:]))
+                    # pd2 = self.compute_beta(r0 = torch.sqrt(d2.get_a_out()/torch.pi))*(torch.sqrt(d2.get_a_out()) - torch.sqrt(d2.get_a_out()[0,:]))
+
+                    # loss_pressure += torch.mean(
+                    #    torch.square(
+                    #        p.get_p_in()
+                    #        + 0.5 * self.rho * torch.square(p.get_u_in())
+                    #        - d1.get_p_out()
+                    #        - 0.5 * self.rho * torch.square(d1.get_u_out())
+                    #    )
+                    # )
+                    # loss_pressure += torch.mean(
+                    #    torch.square(
+                    #        p.get_p_in()
+                    #        + 0.5 * self.rho * torch.square(p.get_u_in())
+                    #        - d2.get_p_out()
+                    #        - 0.5 * self.rho * torch.square(d2.get_u_out())
+                    #    )
+                    # )
+                    p1 = p.get_p_in()
+                    pd1 = d1.get_p_out()
+                    pd2 = d2.get_p_out()
+                    loss_pressure += torch.mean(torch.square(p1 - pd1)) + torch.mean(
+                        torch.square(p1 - pd2)
                     )
                 else:
                     loss_mass += torch.mean(
@@ -716,21 +888,32 @@ class COW(object):
                             - d2.get_u_in() * d2.get_a_in()
                         )
                     )
-                    loss_pressure += torch.mean(
-                        torch.square(
-                            p.get_p_out()
-                            + 0.5 * self.rho * torch.square(p.get_u_out())
-                            - d1.get_p_in()
-                            - 0.5 * self.rho * torch.square(d1.get_u_in())
-                        )
-                    )
-                    loss_pressure += torch.mean(
-                        torch.square(
-                            p.get_p_out()
-                            + 0.5 * self.rho * torch.square(p.get_u_out())
-                            - d2.get_p_in()
-                            - 0.5 * self.rho * torch.square(d2.get_u_in())
-                        )
+                    # p1 = self.compute_beta(r0 = torch.sqrt(p.get_a_out()/torch.pi))*(torch.sqrt(p.get_a_out()) - torch.sqrt(p.get_a_out()[0,:]))
+                    # pd1 = self.compute_beta(r0 = torch.sqrt(d1.get_a_in()/torch.pi))*(torch.sqrt(d1.get_a_in()) - torch.sqrt(d1.get_a_in()[0,:]))
+                    # pd2 = self.compute_beta(r0 = torch.sqrt(d2.get_a_in()/torch.pi))*(torch.sqrt(d2.get_a_in()) - torch.sqrt(d2.get_a_in()[0,:]))
+
+                    # loss_pressure += torch.mean(
+                    #    torch.square(
+                    #        p.get_p_out()
+                    #        + 0.5 * self.rho * torch.square(p.get_u_out())
+                    #        - d1.get_p_in()
+                    #        - 0.5 * self.rho * torch.square(d1.get_u_in())
+                    #    )
+                    # )
+                    # loss_pressure += torch.mean(
+                    #    torch.square(
+                    #        p.get_p_out()
+                    #        + 0.5 * self.rho * torch.square(p.get_u_out())
+                    #        - d2.get_p_in()
+                    #        - 0.5 * self.rho * torch.square(d2.get_u_in())
+                    #    )
+                    # )
+                    p1 = p.get_p_out()
+                    pd1 = d1.get_p_in()
+                    pd2 = d2.get_p_in()
+
+                    loss_pressure += torch.mean(torch.square(p1 - pd2)) + torch.mean(
+                        torch.square(p1 - pd1)
                     )
         return loss_mass, loss_pressure
 
@@ -786,6 +969,7 @@ class COW(object):
             self.arteries[idx].set_a_out(pred[i, -100:, 1])
             self.arteries[idx].set_p_in(pred[i, :100, 0])
             self.arteries[idx].set_p_out(pred[i, -100:, 0])
+            self.arteries[idx].set_a0_rec(pred[i, 0::100, 1])
             if self.arteries[idx].has_mesurement():
                 self.arteries[idx].set_reconstructed_u_mesurement(
                     pred[i, 100 * 100 : 100 * 101, 2]
@@ -793,7 +977,9 @@ class COW(object):
 
     def get_arteries(self, idx, model: str = "GNOT"):
         try:
-            return self.arteries[idx].get_inputs(model)
+            return self.arteries[idx].get_inputs(
+                model, self.model_VANO, self.normalizer_u_bc
+            )
         except ValueError:
             pass
 
@@ -801,6 +987,7 @@ class COW(object):
         """
         Function passes SV value to arteries
         """
+
         for artery in self.arteries:
             artery.set_SV(self.SV)
 
@@ -810,6 +997,15 @@ class COW(object):
         """
         for artery in self.arteries:
             artery.log()
+
+    def compute_a0_loss(self, batch_idx):
+        loss = 0
+        if batch_idx is not None:
+            for idx in batch_idx:
+                loss += nn.MSELoss()(
+                    self.arteries[idx].get_a0_rec(), self.arteries[idx].get_a0()
+                )
+            return loss
 
     def solve(
         self,
@@ -887,29 +1083,94 @@ class COW(object):
         Solving inverse proble one joint at a time and accumulating
         gradient
         """
-        iter = 0
+        it = 0
         for i in range(max_iters):
+            # print(self.arteries[11].get_parameters())
+            # print(self.arteries[9].get_parameters())
+            self.optimizer_non_mes.zero_grad()
+            self.optimizer_full.zero_grad()
+            for idx, joint in enumerate(self.joints):
+                self.optimizer_mes.zero_grad()
 
-            for joint in self.joints:
-                self.optimizer.zero_grad()
+                # if idx ==8 and it>1:
+                #  break
                 loss = 0
                 p, d1, d2, merging = joint
                 batch_idx = [int(p), int(d1), int(d2)]
+                # print(p)
+                # print(d1)
+                # print(d2)
                 self.solve_arteries(batch_size, batch_idx)
-                loss += lambda_reg * self.get_reg_loss(batch_size, batch_idx)
-                loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
-                loss += lambda_sv * self.compute_SV_loss()
-                loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
-                loss += lambda_bif * (loss_mass + loss_pressure)
-                loss = loss / len(self.joints)
+                # loss += lambda_reg * self.get_reg_loss(batch_size, batch_idx)
+                if it < 50:
 
-                loss.backward()
+                    loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
+                    loss += lambda_sv * self.compute_SV_loss()
+                    # if loss == 0:
+                    #  loss += nn.MSELoss()(torch.Tensor([loss]), 1e-8)
+                    loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
+                    loss += 1e-20 * lambda_bif * (loss_mass + loss_pressure)
+                    # loss = loss / len(self.joints)
+                    loss_a0 = self.compute_a0_loss(batch_idx)
+                    loss += 1000 * loss_a0
+                    loss.backward()
+                    self.optimizer_mes.step()
+                    print(f"joint {idx}, mass_loss = {loss_mass}")
+                    print(f"joint {idx}, pressure loss = {loss_pressure}")
+                    print(f"a0 loss = {loss_a0}")
 
-                self.optimizer.step()
+                elif it >= 60 and it < 200:
+                    loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
+
+                    loss += (
+                        lambda_bif
+                        * (500 * loss_mass + loss_pressure / 10000)
+                        / len(self.joints)
+                    )
+                    loss_a0 = self.compute_a0_loss(batch_idx)
+                    loss += 1000 * loss_a0
+                    loss.backward()
+                    print(f"joint {idx}, mass_loss = {loss_mass}")
+                    print(f"joint {idx}, pressure loss = {loss_pressure}")
+                    print(f"a0 loss = {loss_a0}")
+                    # self.optimizer_non_mes.step()
+
+                else:
+                    loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
+                    # loss += lambda_sv * self.compute_SV_loss()
+                    loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
+
+                    loss += (
+                        lambda_bif
+                        * (500 * loss_mass + loss_pressure / 10000)
+                        / len(self.joints)
+                    )
+                    loss_a0 = self.compute_a0_loss(batch_idx)
+                    loss += 1000 * loss_a0
+
+                    print(f"joint {idx}, mass_loss = {loss_mass}")
+                    print(f"joint {idx}, pressure loss = {loss_pressure}")
+                    print(f"a0 loss = {loss_a0}")
+                    # loss = loss / len(self.joints)
+                    try:
+                        loss.backward()
+                        # self.optimizer_full.step()
+                    except:
+                        pass
+            if it >= 50 and it < 100:
+                self.optimizer_non_mes.step()
+            else:
+                self.optimizer_full.step()
+
+            # self.optimizer.step()
             self.propagate_SV()
+            # print(self.arteries[11].get_parameters())
+            # print(self.arterise[9].get_parameters())
             print(loss.item())
 
-            if self.track and iter % log_every == 0:
+            # sys.exit()
+
+            if self.track and it % log_every == 0:
                 wandb.log(
                     {
                         "loss": loss.item(),
@@ -920,6 +1181,7 @@ class COW(object):
                     }
                 )
                 self.log_arteries()
+                print(f"val = {self.compute_validation_l2_loss(batch_size)}")
                 wandb.log(
                     {
                         "SV": self.SV.item(),
@@ -931,9 +1193,61 @@ class COW(object):
 
             if loss < eps:
                 break
+            it += 1
 
         validation_loss = self.compute_validation_l2_loss(batch_size)
-        wandb.log({"Validation loss": validation_loss.item()})
+        wandb.log({"Validation loss": validation_loss})
+        self.log_validation()
 
-        iter += 1
+        # iter += 1
         return validation_loss
+
+    def log_validation(self):
+        tbl = wandb.Table(
+            columns=["Artery", "rL2 Area", "rL2 Pressure", "rL2 Velocity"]
+        )
+        with torch.no_grad():
+            for idx, artery in enumerate(self.arteries):
+                for batch, ids in self.loader_GNOT(1, [idx]):
+                    g, u_p, g_u = batch
+                    g, u_p, g_u = (
+                        g.to(self.device),
+                        u_p.to(self.device),
+                        g_u.to(self.device),
+                    )
+
+                    g.ndata["x"] = self.normalizer_x.transform(
+                        g.ndata["x"], inverse=False
+                    )
+                    u_p = self.normalizer_theta.transform(u_p, inverse=False)
+
+                    g, u_p, g_u = (
+                        g.to(self.device),
+                        u_p.to(self.device),
+                        g_u.to(self.device),
+                    )
+
+                    out = self.model_surrogate(g, u_p, g_u)
+                    out = self.normalizer_y.transform(out, inverse=True)
+                    y_true = g.ndata["y"].squeeze().to(self.device)
+                    los_a, _, _ = self.l2_loss(g, out[:, 1], y_true[:, 1])
+                    los_p, _, _ = self.l2_loss(g, out[:, 0], y_true[:, 0])
+                    los_u, _, _ = self.l2_loss(g, out[:, 2], y_true[:, 2])
+
+                    tbl.add_data(
+                        artery.name,
+                        los_a.item(),
+                        los_p.item(),
+                        los_u.item(),
+                    )
+        wandb.log({"Loss table": tbl})
+
+    def compute_beta(self, r0: float):
+        """
+        Function computes Eh from empirical relation Olufsen
+        """
+        k1 = 2e7
+        k2 = -22.53
+        k3 = 86.5e5
+        Eh = r0 * (k1 * torch.exp(k2 * r0) + k3)
+        return 4 / 3 * torch.sqrt(torch.Tensor([torch.pi]).to(self.device)) * Eh

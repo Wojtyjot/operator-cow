@@ -13,6 +13,7 @@ from models.ae import MLAE
 from models.cgpt import CGPT
 from models.mmgpt import GNOT, GNOT_DISCRIMINATOR
 from models.optimizer import AdamW
+from models.VANO import VANO
 from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
@@ -163,10 +164,14 @@ def main(config: DictConfig) -> None:
             ]
         ),
     )
+    normalizer_u_bc = UnitTransformer_2(
+        mean=torch.Tensor([[32.0895]]), std=torch.Tensor([[26.3722]])
+    )
 
     normalizer_x = normalizer_x.to(device)
     normalizer_y = normalizer_y.to(device)
     normalizer_theta = normalizer_theta.to(device)
+    normalizer_u_bc = normalizer_u_bc.to(device)
 
     # load models
     model_surrogate = GNOT(
@@ -186,21 +191,27 @@ def main(config: DictConfig) -> None:
         attn_dropout=config.model.attn_dropout,
         horiz_fourier_dim=config.model.horiz_fourier_dim,
     )
-    AE_model = MLAE(
-        layers=config.model.ae.layers,
+    # AE_model = MLAE(
+    #    layers=config.model.ae.layers,
+    # )
+    VANO_model = VANO(
+        layers_encoder=config.model.VANO.layers_encoder,
+        layers_decoder=config.model.VANO.layers_decoder,
+        latent_dim=config.model.VANO.latent_dim,
     )
-
     # Load model weights
     model_surrogate = model_surrogate.to(device)
-    AE_model = AE_model.to(device)
+    # AE_model = AE_model.to(device)
+    VANO_model = VANO_model.to(device)
 
     model_surrogate.load_state_dict(torch.load(config.model.surrogate_weights_path))
-    AE_model.load_state_dict(torch.load(config.model.AE_weights_path))
+    # AE_model.load_state_dict(torch.load(config.model.AE_weights_path))
+    VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
 
     # initialize COW
     cow = COW(
         model_surrogate=model_surrogate,
-        AE_model=AE_model,
+        AE_model=None,
         normalizer_x=normalizer_x,
         normalizer_y=normalizer_y,
         normalizer_theta=normalizer_theta,
@@ -209,6 +220,9 @@ def main(config: DictConfig) -> None:
         lr=config.inverse.lr,
         track=config.log,
         data_path=config.data.data_path,
+        normalizer_u_bc=normalizer_u_bc,
+        model_VANO=VANO_model,
+        VANO=True,
     )
 
     L2 = cow.solve_accumulate(

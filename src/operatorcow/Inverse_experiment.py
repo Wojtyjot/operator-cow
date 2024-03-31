@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
-from inverse import optimize_input_test_VANO
+from inverse.inverse import optimize_input_test_VANO
 from log_plots import plot_predictions
 from models.ae import MLAE
 from models.cgpt import CGPT
@@ -18,6 +18,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
+from utils.utils import UnitTransformer_2
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,10 @@ def main(config: DictConfig) -> None:
     normalizer = dataset.y_normalizer.to(device)
     normalizer_up = dataset.up_normalizer.to(device)
     normalizer_x = dataset.x_normalizer.to(device)
+    normalizer_u_bc = UnitTransformer_2(
+        mean=torch.Tensor([[32.0895]]), std=torch.Tensor([[26.3722]])
+    )
+    normalizer_u_bc = normalizer_u_bc.to(device)
 
     test_loader = MIODataLoader(
         test_data,
@@ -95,7 +100,7 @@ def main(config: DictConfig) -> None:
     # AE_model.load_state_dict(torch.load(config.model.AE_weights_path))
     VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
     # get data
-    g, theta, inputs_f = test_data[5]
+    g, theta, inputs_f = test_data[1709]
     g, theta, inputs_f = g.to(device), theta.to(device), inputs_f.to(device)
 
     # optimize input
@@ -119,6 +124,7 @@ def main(config: DictConfig) -> None:
         normalizer_y=normalizer,
         normalizer_x=normalizer_x,
         metric=metric,
+        normalizer_u_bc=normalizer_u_bc,
     )
 
     # evaluate whole domain

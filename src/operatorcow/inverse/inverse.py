@@ -298,6 +298,7 @@ def optimize_input_test_VANO(
     normalizer_y,
     normalizer_x,
     metric,
+    normalizer_u_bc,
 ):
     # Set model to eval mode
     model_surrogate.eval()
@@ -372,8 +373,18 @@ def optimize_input_test_VANO(
         u_bc_sampled = VANO_model.decode(
             u_bc_latent.reshape(1, 16), condition.reshape(1, 11)
         )
+        u_bc_sampled = normalizer_u_bc.transform(u_bc_sampled, inverse=True)
+        # print(u_bc_sampled.shape)
+
+        # plt.plot(np.linspace(0,1,100), u_bc_sampled[0,:].detach().cpu().numpy())
+        # plt.savefig('/content/drive/MyDrive/operator-cow/data/Plots/sampled')
 
         bc = get_BC(u_bc_sampled, device)
+        # print(bc.shape)
+
+        # plt.plot(np.linspace(0,1,100), bc[:,-1].detach().cpu().numpy())
+        # plt.savefig('/content/drive/MyDrive/operator-cow/data/Plots/get_bc')
+        # sys.exit()
 
         true_in_BC = inputs_f[0]
         p0 = inputs_f[1]  # holding constant

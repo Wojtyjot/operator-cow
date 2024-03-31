@@ -733,6 +733,8 @@ class COWDataset(DGLDataset):
         self.u_p = list()  # theta, global parameters
         for i in range(len(self)):
             x, y, u_p, input_f = self.data[i]
+            in_BC, p0, u0, a0 = input_f
+            input_f = (in_BC, a0)
             g = dgl.DGLGraph()
             g.add_nodes(x.shape[0])
             g.ndata["x"] = torch.from_numpy(x).float()
@@ -826,8 +828,8 @@ class COWDataset_GANO(DGLDataset):
         # self.inputs_f = list()
         self.u_p = list()  # theta, global parameters
         for i in range(len(self)):
-            _, _, u_p, input_f = self.data[i]
-            x = self.create_x()
+            x, _, u_p, input_f = self.data[i]
+            x = self.create_x(x)
             y = self.get_y(input_f)
             u_p = u_p[:11]  # take only artery encoded
             g = dgl.DGLGraph()
@@ -852,13 +854,17 @@ class COWDataset_GANO(DGLDataset):
 
         return
 
-    def create_x(self):
+    def create_x(self, x):
         """
-        Create x from time
+        get time from x [[x0, t0]
+                        [x1, t0]
+                        ...
+                        xn, tn ]
         """
-        x = np.linspace(0, 1, 100)
-        x = x.reshape(-1, 1)
-        return x
+        T = x[-1, 1]
+        t = np.linspace(0, T, 100)
+        t = t.reshape(-1, 1)
+        return t
 
     def get_y(self, in_funcs):
         """
