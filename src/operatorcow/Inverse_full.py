@@ -222,6 +222,7 @@ def main(config: DictConfig) -> None:
         data_path=config.data.data_path,
         normalizer_u_bc=normalizer_u_bc,
         model_VANO=VANO_model,
+        VANO=True,
     )
 
     L2 = cow.solve_accumulate(

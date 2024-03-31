@@ -38,22 +38,21 @@ def main(config: DictConfig) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load the data
-    dataset = COWDataset_GANO(config.data.path)
-    torch.manual_seed(2137)
-    train_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
+    dataset_train = COWDataset_GANO(config.data.path_train)
+    dataset_test = COWDataset_GANO(config.data.path_test)
     torch.manual_seed(config.seed)
     # save normalizer to renormalize data for plotting and evaluation
-    normalizer_y = dataset.y_normalizer.to(device)
-    normalizer_up = dataset.up_normalizer.to(device)
+    normalizer_y = dataset_train.y_normalizer.to(device)
+    normalizer_up = dataset_train.up_normalizer.to(device)
 
     train_loader = MIODataLoader(
-        train_data,
+        dataset_train,
         batch_size=config.data.batch_size,
         shuffle=True,
         drop_last=False,
     )
     test_loader = MIODataLoader(
-        test_data,
+        dataset_test,
         batch_size=config.data.batch_size,
         shuffle=False,
         drop_last=False,

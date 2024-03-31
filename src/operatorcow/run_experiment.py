@@ -36,22 +36,22 @@ def main(config: DictConfig) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load the data
-    dataset = COWDataset(config.data.path)
-    torch.manual_seed(2137)
-    train_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
+    dataset_train = COWDataset(config.data.path_train)
+    dataset_test = COWDataset(config.data.path_test)
+
     torch.manual_seed(config.seed)
     # save normalizer to renormalize data for plotting and evaluation
-    normalizer = dataset.y_normalizer.to(device)
-    normalizer_up = dataset.up_normalizer.to(device)
+    normalizer = dataset_train.y_normalizer.to(device)
+    normalizer_up = dataset_test.up_normalizer.to(device)
 
     train_loader = MIODataLoader(
-        train_data,
+        dataset_train,
         batch_size=config.data.batch_size,
         shuffle=True,
         drop_last=False,
     )
     test_loader = MIODataLoader(
-        test_data,
+        dataset_test,
         batch_size=config.data.batch_size,
         shuffle=False,
         drop_last=False,
@@ -61,9 +61,10 @@ def main(config: DictConfig) -> None:
     if config.model.name == "CGPT":
 
         model = CGPT(
-            trunk_size=dataset.config["input_dim"] + dataset.config["theta_dim"],
-            branch_sizes=dataset.config["branch_sizes"],
-            output_size=dataset.config["output_dim"],
+            trunk_size=dataset_train.config["input_dim"]
+            + dataset_train.config["theta_dim"],
+            branch_sizes=dataset_train.config["branch_sizes"],
+            output_size=dataset_train.config["output_dim"],
             space_dim=2,
             n_layers=config.model.n_layers,
             n_hidden=config.model.n_hidden,
@@ -81,9 +82,10 @@ def main(config: DictConfig) -> None:
     elif config.model.name == "GNOT":
 
         model = GNOT(
-            trunk_size=dataset.config["input_dim"] + dataset.config["theta_dim"],
-            branch_sizes=dataset.config["branch_sizes"],
-            output_size=dataset.config["output_dim"],
+            trunk_size=dataset_train.config["input_dim"]
+            + dataset_train.config["theta_dim"],
+            branch_sizes=dataset_train.config["branch_sizes"],
+            output_size=dataset_train.config["output_dim"],
             space_dim=2,
             n_layers=config.model.n_layers,
             n_hidden=config.model.n_hidden,
@@ -103,7 +105,7 @@ def main(config: DictConfig) -> None:
 
     # Put model on device
     model = model.to(device)
-    print(f"Number of rainable parameters = {utils.get_num_params(model)}")
+    print(f"Number of trainable parameters = {utils.get_num_params(model)}")
     # Load optimizer
     optimizer = AdamW(
         params=model.parameters(),

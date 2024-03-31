@@ -24,15 +24,16 @@ wandb:
     - development
 
 data:
-  path: /data/path/placeholder
+  path_train: /data/path/placeholder
+  path_test: /data/path/placeholder
   batch_size: 32
 
 
 model:
   name: GNOT
-  n_layers: 4
-  n_hidden: 256
-  n_head: 8
+  n_layers: 3
+  n_hidden: 96
+  n_head: 4
   n_experts: 4
   n_inner: 4
   mlp_layers: 4
