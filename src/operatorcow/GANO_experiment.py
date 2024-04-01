@@ -59,8 +59,7 @@ def main(config: DictConfig) -> None:
         model = CGPT(
             trunk_size=dataset.config["input_dim"] + dataset.config["theta_dim"],
             branch_sizes=dataset.config["branch_sizes"],
-            output_size=dataset.config["output_dim"],
-            space_dim=1,
+            output_size=dataset.config["output_dim"],https://github.com/Wojtyjot/operator-cow.git
             n_layers=config.model.n_layers,
             n_hidden=config.model.n_hidden,
             n_head=config.model.n_head,
@@ -181,6 +180,8 @@ def main(config: DictConfig) -> None:
         grf=grf,
         model_save_path=config.model.model_save_path,
     )
+
+    
 
 
 if __name__ == "__main__":

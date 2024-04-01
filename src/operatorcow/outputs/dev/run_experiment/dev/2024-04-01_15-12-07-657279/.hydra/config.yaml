@@ -1,34 +1,19 @@
 seed: ${generate_random_seed:}
-
 data_dir: ${hydra:runtime.cwd}/data
-
 outputs_dir: ${hydra:runtime.cwd}/outputs
-
 outputs_subdir: dev
-
 job_subdir: dev
-
-hydra:
-  run:
-    dir: outputs/${outputs_subdir}/${hydra.job.name}/${job_subdir}/${now:%Y-%m-%d_%H-%M-%S-%f}
-  job:
-    chdir: true
-  verbose: false
-
 wandb:
   project: AORTA
   dir: ${hydra:runtime.cwd}/outputs
   mode: online
   anonymous: allow
   tags:
-    - development
-
+  - development
 data:
   path_train: /home/wssk-ptw/Operator/AORTA_DATASET/GNOT_train_AORTA.npy
   path_test: /home/wssk-ptw/Operator/AORTA_DATASET/GNOT_test_AORTA.npy
   batch_size: 32
-
-
 model:
   name: GNOT
   n_layers: 3
@@ -42,17 +27,11 @@ model:
   ffn_dropout: 0.0
   attn_dropout: 0.0
   horiz_fourier_dim: 0
-
 training:
   epochs: 100
   grad_clip: 1000.0
-
-
 optimizer:
   lr: 0.001
-  weight_decay: 0.00005
+  weight_decay: 5.0e-05
   beta1: 0.9
   beta2: 0.999
-git config --global user.email wojtek.kaczmarek@gmail.com
-git config --global user.name wojtek-kaczmarek
-

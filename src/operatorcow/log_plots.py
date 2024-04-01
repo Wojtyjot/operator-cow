@@ -57,6 +57,40 @@ def encode_artery(artery: str) -> np.ndarray:
     out[index] = 1
     return out
 
+def encode_artery_AORTA(artery: str) -> np.ndarray:
+    """
+    Function encodes artery type as one-hot vector
+    """
+    arteries = [
+        "Brachiocephalic",
+        "L_common_carotid",
+        "L_subclavian",
+        "Ascending_aorta",
+        "Aortic_arch_I",
+        "Aortic_arch_II",
+        "Descending_Aorta",
+    ]
+    out = np.zeros(len(arteries))
+    index = arteries.index(artery)
+    out[index] = 1
+    return out
+
+def decode_artery_AORTA(artery: np.ndarray) -> str:
+    """
+    Function decodes artery one-hot vector to artery name
+    """
+    arteries = [
+        "Brachiocephalic",
+        "L_common_carotid",
+        "L_subclavian",
+        "Ascending_aorta",
+        "Aortic_arch_I",
+        "Aortic_arch_II",
+        "Descending_Aorta",
+    ]
+    index = np.argmax(artery)
+    return arteries[index]
+
 
 def plot_predictions(
     predictions: np.ndarray,

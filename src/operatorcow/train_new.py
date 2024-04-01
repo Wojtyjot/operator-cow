@@ -15,6 +15,8 @@ from log_plots import (
     plot_AE,
     plot_generated,
     plot_predictions,
+    decode_artery_AORTA,
+    encode_artery_AORTA,
 )
 from models.optimizer import Adam
 from torch.optim.lr_scheduler import OneCycleLR
@@ -36,8 +38,8 @@ def train(
     normalizer_up,
     start_epoch: int = 0,
     print_freq: int = 20,
-    model_save_path: str = "../../data/checkpoints/",
-    model_name: str = "model.pt",
+    model_save_path: str = "/home/wssk-ptw/Operator/operator-cow/data/checkpoints",
+    model_name: str = "GNOT_AORTA.pt",
     result_name: str = "results.pt",
 ):
     loss_train = []
@@ -161,10 +163,10 @@ def validate_epoch(
 
             metric_val.append(metric)
             # TRZEBA ZRENORMALIZOWAĆ !!!!!!!!!
-            if len(plotted_vessels) < 10:
+            if len(plotted_vessels) < 6:
 
                 u_p = normalizer_up.transform(u_p, inverse=True)
-                artery = decode_artery(u_p[0][:10].cpu().numpy())  # tu nie 11?
+                artery = decode_artery_AORTA(u_p[0][:5].cpu().numpy())  # tu nie 11?
 
                 if artery not in plotted_vessels:
                     plot_predictions(y_pred.cpu().numpy(), y.cpu().numpy(), artery)
