@@ -31,9 +31,9 @@ data:
 
 model:
   name: GNOT
-  n_layers: 3
-  n_hidden: 96
-  n_head: 4
+  n_layers: 4
+  n_hidden: 256
+  n_head: 8
   n_experts: 4
   n_inner: 4
   mlp_layers: 4
@@ -44,7 +44,7 @@ model:
   horiz_fourier_dim: 0
 
 training:
-  epochs: 100
+  epochs: 500
   grad_clip: 1000.0
 
 
@@ -53,6 +53,5 @@ optimizer:
   weight_decay: 0.00005
   beta1: 0.9
   beta2: 0.999
-git config --global user.email wojtek.kaczmarek@gmail.com
-git config --global user.name wojtek-kaczmarek
+
 
