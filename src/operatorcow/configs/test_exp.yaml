@@ -24,22 +24,16 @@ wandb:
     - development
 
 data:
-<<<<<<< HEAD
-  path_train: /home/wssk-ptw/Operator/AORTA_DATASET/GNOT_train_AORTA.npy
-  path_test: /home/wssk-ptw/Operator/AORTA_DATASET/GNOT_test_AORTA.npy
-  batch_size: 16
-=======
   path_train: /home/wssk-ptw/Operator/AORTA_DATASET/GNOT_train_AORTA_new_BC.npy
   path_test: /home/wssk-ptw/Operator/AORTA_DATASET/GNOT_test_AORTA_new_BC.npy
-  batch_size: 32
->>>>>>> 559ef1d16e1222c7c3fe4d6feb78551722b2ac75
+  batch_size: 16
 
 
 model:
   name: GNOT
-  n_layers: 3
-  n_hidden: 96
-  n_head: 4
+  n_layers: 4
+  n_hidden: 256
+  n_head: 8
   n_experts: 4
   n_inner: 4
   mlp_layers: 4
