@@ -26,7 +26,7 @@ wandb:
 data:
   path_train: /home/wssk-ptw/Operator/AORTA_DATASET/GNOT_train_AORTA.npy
   path_test: /home/wssk-ptw/Operator/AORTA_DATASET/GNOT_test_AORTA.npy
-  batch_size: 32
+  batch_size: 16
 
 
 model:
