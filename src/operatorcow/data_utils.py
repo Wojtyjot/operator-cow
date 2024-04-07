@@ -733,7 +733,7 @@ class COWDataset(DGLDataset):
         self.u_p = list()  # theta, global parameters
         for i in range(len(self)):
             x, y, u_p, input_f = self.data[i]
-            in_BC, p0, u0, a0 = input_f
+            in_BC, p0, u0, a0, A_BC, p_BC, p_out_BC = input_f
             input_f = (in_BC, a0)
             g = dgl.DGLGraph()
             g.add_nodes(x.shape[0])
