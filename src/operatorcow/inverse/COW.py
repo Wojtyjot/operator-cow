@@ -52,10 +52,11 @@ class Artery(object):
         self.theta = theta  # NIE JEST ZNORMALIZOWANE !
         self.inputs_f = inputs_f
         self.L = g.ndata["x"][-1, 0]
+        self.T = g.ndata["x"][-1, 1]
         self.root = root
         self.mesurement = mesurement
         self.VANO = VANO
-        self.condition = condition
+        self.condition = condition  # condition for VANO model
         if normalizer_u_bc is not None:
             self.normalizer_u_bc = normalizer_u_bc
         self.a0 = None
@@ -78,9 +79,7 @@ class Artery(object):
                 # print(self.u_bc.shape)
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 self.mesurement_value = (
-                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
-                    .squeeze()
-                    .to(self.device)
+                    self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().to(self.device)
                 )
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
@@ -112,19 +111,17 @@ class Artery(object):
 
             if measurement:
                 self.u_bc = (
-                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
+                    self.g.ndata["y"][100 * 25 : 100 * 26, 2]
                     .unsqueeze(-1)
                     .to(self.device)
                     .requires_grad_(True)
                 )
                 print(self.u_bc.shape)
-                u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 self.mesurement_value = (
-                    self.g.ndata["y"][100 * 100 : 100 * 101, 2]
-                    .squeeze()
-                    .to(self.device)
+                    self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().to(self.device)
                 )
-                self.parameters = [self.u_bc, u0]
+                self.parameters = [self.u_bc]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
 
             elif self.root:
@@ -151,11 +148,15 @@ class Artery(object):
         """
         return self.parameters
 
-    def get_u_BC(self, VANO_model: nn.Module = None, normalizer_u_bc=None):
+    def get_u_BC(
+        self, VANO_model: nn.Module = None, normalizer_u_bc=None, T: float = 1.0
+    ):
         """
         Function return boundary condition
         """
-        t = torch.linspace(0, 1, 100).to(self.device).reshape(-1, 1)
+        t = (
+            torch.linspace(0, self.T, 100).to(self.device).reshape(-1, 1)
+        )  ## Need to pass T
         x = torch.zeros(100, 1).to(self.device).reshape(-1, 1)
         if self.VANO:
             if self.root:
@@ -183,8 +184,8 @@ class Artery(object):
         """
         Function returns u0 initial condition
         """
-        x = torch.linspace(0, self.L, 200).to(self.device).reshape(-1, 1)
-        t = torch.zeros(200, 1).to(self.device).reshape(-1, 1)
+        x = torch.linspace(0, self.L, 50).to(self.device).reshape(-1, 1)
+        t = torch.zeros(50, 1).to(self.device).reshape(-1, 1)
 
         if self.root:
             return torch.cat((x, t, self.parameters[0]), dim=-1)
@@ -192,20 +193,35 @@ class Artery(object):
             return torch.cat((x, t, self.parameters[1]), dim=-1)
 
     def get_inputs(
-        self, model: str, VANO_model: nn.Module = None, normalizer_u_bc=None
+        self,
+        model: str,
+        VANO_model: nn.Module = None,
+        normalizer_u_bc=None,
+        T: float = 1.0,
     ):
         """
         Function return inputs to model
         """
         if model == "GNOT":
-            p0, u0, a0 = self.inputs_f[1], self.inputs_f[2], self.inputs_f[3]
+            p0, u0, a0, A_BC, p_BC, p_out_BC = (
+                self.inputs_f[1],
+                self.inputs_f[2],
+                self.inputs_f[3],
+                self.inputs_f[4],
+                self.inputs_f[5],
+                self.inputs_f[6],
+            )
             # u0 = self.get_u0()
             in_bc = self.get_u_BC(
-                VANO_model=VANO_model, normalizer_u_bc=normalizer_u_bc
+                VANO_model=VANO_model, normalizer_u_bc=normalizer_u_bc, T=T
             )
-            in_f = MultipleTensors([i for i in (in_bc, p0, u0, a0)])
+            in_f = MultipleTensors([i for i in (in_bc, a0)])
 
-            return self.g, torch.cat((self.theta.to(self.device), self.SV)), in_f
+            return (
+                self.g,
+                torch.cat((self.theta.to(self.device), self.RT, self.CT)),
+                in_f,
+            )
 
         elif model == "AE":
             if self.root:
@@ -266,7 +282,15 @@ class Artery(object):
         return self.p_out
 
     def set_SV(self, SV: torch.Tensor):
+        ### need to print warning that SV should not be used
+
         self.SV = SV
+
+    def set_RT(self, RT: torch.Tensor):
+        self.RT = RT
+
+    def set_CT(self, CT: torch.Tensor):
+        self.CT = CT
 
     def has_mesurement(self):
         return self.mesurement
@@ -317,9 +341,21 @@ class COW(object):
         normalizer_u_bc=None,
     ):
         self.rho = 1.06  ## must be in CGS units
-        self.SV_true = None
-        self.SV = (
-            torch.Tensor([np.random.uniform(70, 140)]).to(device).requires_grad_(True)
+        # self.SV_true = None
+        # self.SV = (
+        #    torch.Tensor([np.random.uniform(70, 140)]).to(device).requires_grad_(True)
+        # )
+        self.RT_true = None
+        self.CT_true = None
+        self.RT = (
+            torch.Tensor([np.random.uniform(62770839.96, 194904651.43)])
+            .to(device)
+            .requires_grad_(True)
+        )
+        self.CT = (
+            torch.Tensor([np.random.uniform(6.875e-9, 2.135e-8)])
+            .to(device)
+            .requires_grad_(True)
         )
         self.VANO = VANO
         self.device = device
@@ -499,9 +535,9 @@ class COW(object):
             if artery.get_parameters() is not None:
                 p3.extend(artery.get_parameters())
         # print(self.SV.requires_grad_(True).is_leaf)
-        p.extend([self.SV.requires_grad_(True)])
-        p2.extend([self.SV.requires_grad_(True)])
-        p3.extend([self.SV.requires_grad_(True)])
+        p.extend([self.RT.requires_grad_(True), self.CT.requires_grad_(True)])
+        p2.extend([self.RT.requires_grad_(True), self.CT.requires_grad_(True)])
+        p3.extend([self.RT.requires_grad_(True), self.CT.requires_grad_(True)])
         print(len(p))
         print(len(p2))
         print(len(p3))
@@ -771,15 +807,15 @@ class COW(object):
                         - d2.get_u_out() * d2.get_a_out()
                     )
                 )
-                p1 = self.compute_beta(r0=torch.sqrt(p.get_a_in() / torch.pi)) * (
-                    torch.sqrt(p.get_a_in()) - torch.sqrt(p.get_a_in()[0])
-                )
-                pd1 = self.compute_beta(r0=torch.sqrt(d1.get_a_out() / torch.pi)) * (
-                    torch.sqrt(d1.get_a_out()) - torch.sqrt(d1.get_a_out()[0])
-                )
-                pd2 = self.compute_beta(r0=torch.sqrt(d2.get_a_out() / torch.pi)) * (
-                    torch.sqrt(d2.get_a_out()) - torch.sqrt(d2.get_a_out()[0])
-                )
+                # p1 = self.compute_beta(r0=torch.sqrt(p.get_a_in() / torch.pi)) * (
+                #    torch.sqrt(p.get_a_in()) - torch.sqrt(p.get_a_in()[0])
+                # )
+                # pd1 = self.compute_beta(r0=torch.sqrt(d1.get_a_out() / torch.pi)) * (
+                #    torch.sqrt(d1.get_a_out()) - torch.sqrt(d1.get_a_out()[0])
+                # )
+                # pd2 = self.compute_beta(r0=torch.sqrt(d2.get_a_out() / torch.pi)) * (
+                #    torch.sqrt(d2.get_a_out()) - torch.sqrt(d2.get_a_out()[0])
+                # )
 
                 # loss_pressure += torch.mean(
                 #    torch.square(
@@ -972,7 +1008,7 @@ class COW(object):
             self.arteries[idx].set_a0_rec(pred[i, 0::100, 1])
             if self.arteries[idx].has_mesurement():
                 self.arteries[idx].set_reconstructed_u_mesurement(
-                    pred[i, 100 * 100 : 100 * 101, 2]
+                    pred[i, 100 * 25 : 100 * 26, 2]
                 )
 
     def get_arteries(self, idx, model: str = "GNOT"):
@@ -990,6 +1026,22 @@ class COW(object):
 
         for artery in self.arteries:
             artery.set_SV(self.SV)
+
+    def propagate_RT(self):
+        """
+        Function passes RT value to arteries
+        """
+
+        for artery in self.arteries:
+            artery.set_RT(self.RT)
+
+    def propagate_CT(self):
+        """
+        Function passes CT value to arteries
+        """
+
+        for artery in self.arteries:
+            artery.set_CT(self.CT)
 
     def log_arteries(self):
         """
@@ -1039,7 +1091,9 @@ class COW(object):
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
-            self.propagate_SV()
+            # self.propagate_SV()
+            self.propagate_CT()
+            self.propagate_RT()
             print(loss.item())
             if self.track and iter % log_every == 0:
                 wandb.log(
@@ -1163,7 +1217,9 @@ class COW(object):
                 self.optimizer_full.step()
 
             # self.optimizer.step()
-            self.propagate_SV()
+            # self.propagate_SV()
+            self.propagate_CT()
+            self.propagate_RT()
             # print(self.arteries[11].get_parameters())
             # print(self.arterise[9].get_parameters())
             print(loss.item())
