@@ -1080,13 +1080,17 @@ class COW(object):
         for artery in self.arteries:
             artery.log()
 
-    def compute_a0_loss(self, batch_idx):
+    def compute_a0_loss(self, batch_idx = None):
         loss = 0
         if batch_idx is not None:
             for idx in batch_idx:
                 loss += nn.MSELoss()(
                     self.arteries[idx].get_a0_rec(), self.arteries[idx].get_a0()
                 )
+            return loss
+        else:
+            for artery in self.arteries:
+                loss += nn.MSELoss()(artery.get_a0_rec(), artery.get_a0())
             return loss
 
     def solve(
@@ -1215,7 +1219,7 @@ class COW(object):
                     print(f"RT = {self.RT}")
                     print(f"CT = {self.CT}")
 
-                elif it < 500 and it >= 3:
+                elif it < 500 and it >= 2:
 
                     loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
                     # loss += lambda_sv * self.compute_SV_loss()
