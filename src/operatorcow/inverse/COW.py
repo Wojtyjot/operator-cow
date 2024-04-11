@@ -1370,7 +1370,7 @@ class COW(object):
                 print(f"RT = {self.RT}")
                 print(f"CT = {self.CT}")
 
-            elif it < 500 and it >= 3:
+            elif it < 500 and it >= 2:
 
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
