@@ -1,4 +1,5 @@
 import gc
+import sys
 from pathlib import Path
 from typing import *
 
@@ -13,7 +14,6 @@ from data_utils import WeightedLpRelLoss
 from log_plots import plot_predictions
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
-import sys
 
 ## Wszystko musi byc na same device
 # artery musi zwracać wszystkie dane potrzebne do obliczen
@@ -254,10 +254,10 @@ class Artery(object):
         plt.plot(self.mesurement_value.detach().cpu().numpy(), label="true")
         plt.title(f"Mesurement point for artery {self.name}")
         plt.legend()
-        
+
         wandb.log({f"comparison_{self.name}": plt})
 
-        #plt.show()
+        # plt.show()
         plt.close()
 
     def set_u_in(self, u_in: torch.Tensor):
@@ -367,7 +367,7 @@ class COW(object):
             .to(device)
             .requires_grad_(True)
         )
-        self.CT = 1.34/self.RT.detach()
+        self.CT = 1.34 / self.RT.detach()
         self.VANO = VANO
         self.device = device
         self.model_surrogate = model_surrogate
@@ -383,10 +383,10 @@ class COW(object):
         self.l2_loss = WeightedLpRelLoss(p=2, component="all", normalizer=None)
         self.load_data(data_path)
         self.create_optimizer(lr)
-        #self.propagate_SV()
+        # self.propagate_SV()
         print(f"RT: {self.RT_true}")
         print(f"CT: {self.CT_true}")
-        #sys.exit()
+        # sys.exit()
         self.propagate_CT()
         self.propagate_RT()
         self.joints = self.create_joints(joints_path)
@@ -434,7 +434,7 @@ class COW(object):
             X, Y, theta, in_funcs = np.load(
                 data_path + artery + ".npy", allow_pickle=True
             )
-            #if self.SV_true is None:
+            # if self.SV_true is None:
             #    self.SV_true = theta[-1]
             if self.RT_true is None:
                 self.RT_true = theta[-2]
@@ -562,8 +562,8 @@ class COW(object):
         print(len(p2))
         print(len(p3))
         p4 = [self.RT.requires_grad_(True)]
-        #p5 = [self.CT.requires_grad_(True)]
-        #self.optimizer_ct = torch.optim.Adam(p5, lr=lr)
+        # p5 = [self.CT.requires_grad_(True)]
+        # self.optimizer_ct = torch.optim.Adam(p5, lr=lr)
         self.optimizer_tr = torch.optim.Adam(p4, lr=lr)
         self.optimizer_mes = torch.optim.Adam(p, lr=lr)
         self.optimizer_non_mes = torch.optim.Adam(p2, lr=lr)
@@ -1063,7 +1063,7 @@ class COW(object):
         """
         Function updates CT value
         """
-        self.CT = 1.34/self.RT.detach()
+        self.CT = 1.34 / self.RT.detach()
 
     def propagate_CT(self):
         """
@@ -1113,9 +1113,9 @@ class COW(object):
             iter += 1
             self.solve_arteries(batch_size)
             loss = 0
-            #loss += lambda_reg * self.get_reg_loss(batch_size)
+            # loss += lambda_reg * self.get_reg_loss(batch_size)
             loss += lambda_mes * self.compute_mesurement_loss()
-            #loss += lambda_sv * self.compute_SV_loss()
+            # loss += lambda_sv * self.compute_SV_loss()
             loss_mass, loss_pressure = self.compute_bifurcation_loss()
             loss += lambda_bif * (loss_mass + loss_pressure)
             self.optimizer_full.zero_grad()
@@ -1129,16 +1129,16 @@ class COW(object):
                 wandb.log(
                     {
                         "loss": loss.item(),
-                        #"reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
+                        # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
                         "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
-                        #"SV_loss": lambda_sv * self.compute_SV_loss(),
+                        # "SV_loss": lambda_sv * self.compute_SV_loss(),
                         "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
                     }
                 )
                 self.log_arteries()
                 wandb.log(
                     {
-                        #"SV": self.SV.item(),
+                        # "SV": self.SV.item(),
                         "Validation loss": self.compute_validation_l2_loss(
                             batch_size
                         ).item(),
@@ -1176,7 +1176,7 @@ class COW(object):
             for idx, joint in enumerate(self.joints):
                 self.optimizer_mes.zero_grad()
                 self.optimizer_tr.zero_grad()
-                #self.optimizer_ct.zero_grad()
+                # self.optimizer_ct.zero_grad()
 
                 # if idx ==8 and it>1:
                 #  break
@@ -1190,24 +1190,24 @@ class COW(object):
                 # loss += lambda_reg * self.get_reg_loss(batch_size, batch_idx)
                 if it < 2:
                     loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
-                    #loss += lambda_sv * self.compute_SV_loss()
+                    # loss += lambda_sv * self.compute_SV_loss()
                     # if loss == 0:
                     #  loss += nn.MSELoss()(torch.Tensor([loss]), 1e-8)
                     loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
                     loss += lambda_bif * (loss_mass + loss_pressure)
                     # loss = loss / len(self.joints)
                     loss_a0 = self.compute_a0_loss(batch_idx)
-                    loss +=  loss_a0
+                    loss += loss_a0
                     loss.backward()
-                    #self.optimizer_mes.step()
-                    #loss.backward()
+                    # self.optimizer_mes.step()
+                    # loss.backward()
                     self.optimizer_tr.step()
-                    #print(f"joint {idx}, mass_loss = {loss_mass}")
-                    #print(f"joint {idx}, pressure loss = {loss_pressure}")
-                    #print(f"a0 loss = {loss_a0}")
-                    #print(f"mesurement loss = {self.compute_mesurement_loss(batch_idx)}")
-                    #print(batch_idx)
-                    #for i in batch_idx:
+                    # print(f"joint {idx}, mass_loss = {loss_mass}")
+                    # print(f"joint {idx}, pressure loss = {loss_pressure}")
+                    # print(f"a0 loss = {loss_a0}")
+                    # print(f"mesurement loss = {self.compute_mesurement_loss(batch_idx)}")
+                    # print(batch_idx)
+                    # for i in batch_idx:
                     #    self.arteries[i].log()
                     #    if self.arteries[i].has_mesurement() and it %100 == 0:
                     #        print(f"{i} has mesurement")
@@ -1215,37 +1215,32 @@ class COW(object):
                     print(f"RT = {self.RT}")
                     print(f"CT = {self.CT}")
 
-               
-
-                    
-                    
                 elif it < 500 and it >= 3:
 
                     loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
-                    #loss += lambda_sv * self.compute_SV_loss()
+                    # loss += lambda_sv * self.compute_SV_loss()
                     # if loss == 0:
                     #  loss += nn.MSELoss()(torch.Tensor([loss]), 1e-8)
                     loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
                     loss += 1e-20 * lambda_bif * (loss_mass + loss_pressure)
                     # loss = loss / len(self.joints)
                     loss_a0 = self.compute_a0_loss(batch_idx)
-                    loss +=  loss_a0
+                    loss += loss_a0
                     loss.backward()
                     self.optimizer_mes.step()
-                    #print(f"joint {idx}, mass_loss = {loss_mass}")
-                    #print(f"joint {idx}, pressure loss = {loss_pressure}")
-                    #print(f"a0 loss = {loss_a0}")
-                    #print(f"mesurement loss = {self.compute_mesurement_loss(batch_idx)}")
-                    #print(batch_idx)
-                    #for i in batch_idx:
+                    # print(f"joint {idx}, mass_loss = {loss_mass}")
+                    # print(f"joint {idx}, pressure loss = {loss_pressure}")
+                    # print(f"a0 loss = {loss_a0}")
+                    # print(f"mesurement loss = {self.compute_mesurement_loss(batch_idx)}")
+                    # print(batch_idx)
+                    # for i in batch_idx:
                     #    self.arteries[i].log()
                     #    if self.arteries[i].has_mesurement() and it %100 == 0:
                     #        print(f"{i} has mesurement")
                     #        self.arteries[i].log_mesurement()
-                    
-                    
+
                 elif it >= 500 and it < 1000:
-                    #sys.exit()
+                    # sys.exit()
                     loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
 
                     loss += (
@@ -1283,15 +1278,15 @@ class COW(object):
                         self.optimizer_full.step()
                     except:
                         pass
-            #if it >= 50 and it < 100:
+            # if it >= 50 and it < 100:
             #    self.optimizer_non_mes.step()
-            #else:
+            # else:
             #    self.optimizer_full.step()
 
             # self.optimizer.step()
             # self.propagate_SV()
-            
-            #self.propagate_CT()
+
+            # self.propagate_CT()
             self.propagate_RT()
             self.update_CT()
             self.propagate_CT()
@@ -1306,23 +1301,140 @@ class COW(object):
                     {
                         "loss": loss.item(),
                         # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
-                        #"mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
-                        #"SV_loss": lambda_sv * self.compute_SV_loss(),
+                        # "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
+                        # "SV_loss": lambda_sv * self.compute_SV_loss(),
                         "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
                     }
                 )
-                #self.log_arteries()
+                # self.log_arteries()
                 print(f"val = {self.compute_validation_l2_loss(batch_size)}")
                 wandb.log(
                     {
-                        #"SV": self.SV.item(),
+                        # "SV": self.SV.item(),
                         # "Validation loss": self.compute_validation_l2_loss(
                         #     batch_size
                         # ).item(),
                     },
                 )
 
-            #if loss < eps:
+            # if loss < eps:
+            #    break
+            it += 1
+
+        validation_loss = self.compute_validation_l2_loss(batch_size)
+        wandb.log({"Validation loss": validation_loss})
+        self.log_validation()
+
+        # iter += 1
+        return validation_loss
+
+    def solve_accumulate_2(
+        self,
+        max_iters: int,
+        eps: float,
+        batch_size: int,
+        lambda_reg: float,
+        lambda_mes: float,
+        lambda_sv: float,
+        lambda_bif: float,
+        log_every: int,
+    ):
+        """
+        Solving inverse proble one joint at a time and accumulating
+        gradient
+        """
+        it = 0
+        for i in range(max_iters):
+
+            self.optimizer_non_mes.zero_grad()
+            self.optimizer_full.zero_grad()
+            self.optimizer_mes.zero_grad()
+            self.optimizer_tr.zero_grad()
+
+            loss = 0
+
+            self.solve_arteries(batch_size)
+
+            if it < 2:
+                loss += lambda_mes * self.compute_mesurement_loss()
+                loss_mass, loss_pressure = self.compute_bifurcation_loss()
+                loss += lambda_bif * (loss_mass + loss_pressure)
+                loss_a0 = self.compute_a0_loss()
+                loss += loss_a0
+                loss.backward()
+                self.optimizer_tr.step()
+                print(f"RT = {self.RT}")
+                print(f"CT = {self.CT}")
+
+            elif it < 500 and it >= 3:
+
+                loss += lambda_mes * self.compute_mesurement_loss()
+                loss_mass, loss_pressure = self.compute_bifurcation_loss()
+                loss += 1e-20 * lambda_bif * (loss_mass + loss_pressure)
+                loss_a0 = self.compute_a0_loss()
+                loss += loss_a0
+                loss.backward()
+                self.optimizer_mes.step()
+
+            elif it >= 500 and it < 1000:
+                loss_mass, loss_pressure = self.compute_bifurcation_loss()
+
+                loss += (
+                    lambda_bif
+                    * (500 * loss_mass + loss_pressure / 10000)
+                    / len(self.joints)
+                )
+                loss_a0 = self.compute_a0_loss()
+                loss += 1000 * loss_a0
+                loss.backward()
+                self.optimizer_non_mes.step()
+
+            else:
+                loss += lambda_mes * self.compute_mesurement_loss()
+                loss_mass, loss_pressure = self.compute_bifurcation_loss()
+
+                loss += (
+                    lambda_bif
+                    * (500 * loss_mass + loss_pressure / 10000)
+                    / len(self.joints)
+                )
+                loss_a0 = self.compute_a0_loss()
+                loss += 1000 * loss_a0
+
+                try:
+                    loss.backward()
+                    self.optimizer_full.step()
+                except:
+                    pass
+
+            self.propagate_RT()
+            self.update_CT()
+            self.propagate_CT()
+
+            print(loss.item())
+
+            if self.track and it % log_every == 0:
+                wandb.log(
+                    {
+                        "loss": loss.item(),
+                        # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
+                        # "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
+                        # "SV_loss": lambda_sv * self.compute_SV_loss(),
+                        "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
+                    }
+                )
+                # self.log_arteries()
+                print(f"val = {self.compute_validation_l2_loss(batch_size)}")
+                wandb.log(
+                    {
+                        # "SV": self.SV.item(),
+                        # "Validation loss": self.compute_validation_l2_loss(
+                        #     batch_size
+                        # ).item(),
+                    },
+                )
+
+            # if loss < eps:
             #    break
             it += 1
 
