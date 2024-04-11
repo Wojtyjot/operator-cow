@@ -11,7 +11,7 @@ from log_plots import plot_predictions
 from utils.utils import MultipleTensors
 
 
-def get_BC(velocity: torch.Tensor, device: str) -> torch.Tensor:
+def get_BC(velocity: torch.Tensor, device: str, T:float = 1.0) -> torch.Tensor:
     """
     Function computes inflow boundary conditon from velocity array
 
@@ -28,7 +28,7 @@ def get_BC(velocity: torch.Tensor, device: str) -> torch.Tensor:
         Velocity array (nx, nt)
     """
     x = torch.zeros((100, 1)).to(device)
-    t = torch.linspace(0, 1, 100).to(device)
+    t = torch.linspace(0, T, 100).to(device)
     x = x.reshape(-1, 1)
     t = t.reshape(-1, 1)
     out = torch.cat((x, t, velocity.reshape(-1, 1)), dim=-1)
@@ -310,6 +310,7 @@ def optimize_input_test_VANO(
     L_temp = normalizer_x.transform(g.ndata["x"], inverse=True)
     # print(f"L_temp shape = {L_temp.shape}")
     L = L_temp[-1, 0]
+    T = L_temp[-1, 1]
     # print(f"L = {L}")
 
     theta = theta.to(device)
@@ -318,8 +319,8 @@ def optimize_input_test_VANO(
 
     theta = normalizer_up.transform(theta, inverse=True).squeeze()
     # setup optimizable parameters:
-    SV_rec = np.random.uniform(100, 140)
-    SV_rec = torch.Tensor([SV_rec]).to(device).requires_grad_()
+    #SV_rec = np.random.uniform(100, 140)
+    #SV_rec = torch.Tensor([SV_rec]).to(device).requires_grad_()
 
     # initialize random bc
     u_bc_latent = torch.randn(16, 1).to(device).requires_grad_()
@@ -345,7 +346,7 @@ def optimize_input_test_VANO(
     # optimizer list of torch tensors to optimizer
     # in paper LBFGS
 
-    optimizer = torch.optim.Adam([u_bc_latent, SV_rec], lr=1)
+    optimizer = torch.optim.Adam([u_bc_latent], lr=1)
 
     loss_fn = nn.MSELoss()
 
@@ -353,7 +354,8 @@ def optimize_input_test_VANO(
     # print(theta)
     # print(type(theta))
     # print(theta[:-1])
-    SV_true = theta[-1]
+    CT = theta[-1]
+    RT = theta[-2]
     theta_const = theta[:-1].to(device)
 
     # Need to add eps as convergaence threshold
@@ -365,7 +367,7 @@ def optimize_input_test_VANO(
 
         # prepare data for forward pass
 
-        theta_pred = torch.cat((theta_const, SV_rec), dim=0)
+        theta_pred = torch.cat((theta_const, RT, CT), dim=0)
         # print(f"theta_pred befor norm {theta_pred.shape}")
         theta_pred = normalizer_up.transform(theta_pred, inverse=False).squeeze()
         # print(f"theta_pred after norm {theta_pred.shape}")
@@ -379,7 +381,7 @@ def optimize_input_test_VANO(
         # plt.plot(np.linspace(0,1,100), u_bc_sampled[0,:].detach().cpu().numpy())
         # plt.savefig('/content/drive/MyDrive/operator-cow/data/Plots/sampled')
 
-        bc = get_BC(u_bc_sampled, device)
+        bc = get_BC(u_bc_sampled, device, T)
         # print(bc.shape)
 
         # plt.plot(np.linspace(0,1,100), bc[:,-1].detach().cpu().numpy())
@@ -398,7 +400,7 @@ def optimize_input_test_VANO(
         u0 = u0.unsqueeze(0)
         # u0_pred = u0_pred.unsqueeze(0)
         a0 = a0.unsqueeze(0)
-        inputs_f_pred = MultipleTensors([i for i in (bc, p0, u0, a0)])
+        inputs_f_pred = MultipleTensors([i for i in (bc ,a0)])
 
         # forward pass
 
