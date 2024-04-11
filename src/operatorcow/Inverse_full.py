@@ -3,6 +3,7 @@ from pathlib import Path
 
 import hydra
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import wandb
@@ -18,7 +19,7 @@ from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
-from utils.utils import UnitTransformer_2
+from utils.utils import UnitTransformer_2, get_arteries_dict
 
 # from operatorcow.inverse.inverse import optimize_input_test
 
@@ -212,35 +213,115 @@ def main(config: DictConfig) -> None:
     # AE_model.load_state_dict(torch.load(config.model.AE_weights_path))
     VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
 
+    # need to iterate over folder vith validation data
+
+    ## create arteries dict
+    arteries_log = get_arteries_dict()
+
+    val_path = Path(config.data.data_path)
+    L2s = []
+
+    for subfolder in val_path.iterdir():
+        if subfolder.is_dir():
+            cow = COW(
+                model_surrogate=model_surrogate,
+                AE_model=None,
+                normalizer_x=normalizer_x,
+                normalizer_y=normalizer_y,
+                normalizer_theta=normalizer_theta,
+                device=device,
+                joints_path=config.data.joints_path,
+                lr=config.inverse.lr,
+                track=config.log,
+                data_path=subfolder,
+                normalizer_u_bc=normalizer_u_bc,
+                model_VANO=VANO_model,
+                VANO=True,
+            )
+
+            L2 = cow.solve_accumulate_2(
+                max_iters=config.inverse.max_iters,
+                eps=config.inverse.eps,
+                batch_size=config.inverse.batch_size,
+                lambda_reg=config.inverse.lambda_reg,
+                lambda_bif=config.inverse.lambda_bif,
+                lambda_sv=config.inverse.lambda_sv,
+                lambda_mes=config.inverse.lambda_mes,
+                log_every=config.inverse.log_every,
+            )
+            arteries_log = cow.get_validation(arteries_log)
+            L2s.append(L2)
+
+            print(f"Validation data: {subfolder}")
+            print(L2)
+
+    tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
+    L2s = np.array(L2s)
+    tbl_l2.add_data(L2s.mean(), L2s.std())
+    wandb.log({"L2": tbl_l2})
+
+    tbl_arteries = wandb.Table(
+        columns=[
+            "Artery",
+            "rL2 Area mean",
+            "rL2 Area std",
+            "rL2 Velocity mean",
+            "rL2 Velocity std",
+            "rL2 Flow mean",
+            "rL2 Flow std",
+            "rL2 Pressure mean",
+            "rL2 Pressure std",
+        ]
+    )
+    # transform lists inside nested dict to numpy arrays
+    for artery in arteries_log:
+        for key in arteries_log[artery]:
+            arteries_log[artery][key] = np.array(arteries_log[artery][key])
+
+    for artery in arteries_log:
+        tbl_arteries.add_data(
+            artery,
+            arteries_log[artery]["Area"].mean(),
+            arteries_log[artery]["Area"].std(),
+            arteries_log[artery]["Velocity"].mean(),
+            arteries_log[artery]["Velocity"].std(),
+            arteries_log[artery]["Flow"].mean(),
+            arteries_log[artery]["Flow"].std(),
+            arteries_log[artery]["Pressure"].mean(),
+            arteries_log[artery]["Pressure"].std(),
+        )
+    wandb.log({"Arteries": tbl_arteries})
+
     # initialize COW
-    cow = COW(
-        model_surrogate=model_surrogate,
-        AE_model=None,
-        normalizer_x=normalizer_x,
-        normalizer_y=normalizer_y,
-        normalizer_theta=normalizer_theta,
-        device=device,
-        joints_path=config.data.joints_path,
-        lr=config.inverse.lr,
-        track=config.log,
-        data_path=config.data.data_path,
-        normalizer_u_bc=normalizer_u_bc,
-        model_VANO=VANO_model,
-        VANO=True,
-    )
+    # cow = COW(
+    #    model_surrogate=model_surrogate,
+    #    AE_model=None,
+    #    normalizer_x=normalizer_x,
+    #    normalizer_y=normalizer_y,
+    #    normalizer_theta=normalizer_theta,
+    #    device=device,
+    #    joints_path=config.data.joints_path,
+    #    lr=config.inverse.lr,
+    #    track=config.log,
+    #    data_path=config.data.data_path,
+    #    normalizer_u_bc=normalizer_u_bc,
+    #    model_VANO=VANO_model,
+    #    VANO=True,
+    # )
 
-    L2 = cow.solve_accumulate_2(
-        max_iters=config.inverse.max_iters,
-        eps=config.inverse.eps,
-        batch_size=config.inverse.batch_size,
-        lambda_reg=config.inverse.lambda_reg,
-        lambda_bif=config.inverse.lambda_bif,
-        lambda_sv=config.inverse.lambda_sv,
-        lambda_mes=config.inverse.lambda_mes,
-        log_every=config.inverse.log_every,
-    )
+    # L2 = cow.solve_accumulate_2(
+    #    max_iters=config.inverse.max_iters,
+    #    eps=config.inverse.eps,
+    #    batch_size=config.inverse.batch_size,
+    #    lambda_reg=config.inverse.lambda_reg,
+    #    lambda_bif=config.inverse.lambda_bif,
+    #    lambda_sv=config.inverse.lambda_sv,
+    #    lambda_mes=config.inverse.lambda_mes,
+    #    log_every=config.inverse.log_every,
+    # )
+    # arteries_log = cow.get_validation(arteries_log)
 
-    print(L2)
+    # print(L2)
 
 
 if __name__ == "__main__":

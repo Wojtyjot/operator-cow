@@ -1080,7 +1080,7 @@ class COW(object):
         for artery in self.arteries:
             artery.log()
 
-    def compute_a0_loss(self, batch_idx = None):
+    def compute_a0_loss(self, batch_idx=None):
         loss = 0
         if batch_idx is not None:
             for idx in batch_idx:
@@ -1383,11 +1383,7 @@ class COW(object):
             elif it >= 500 and it < 1000:
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += (
-                    lambda_bif
-                    * (4*500 * loss_mass + loss_pressure /(2 * 10000))
-                   
-                )
+                loss += lambda_bif * (4 * 500 * loss_mass + loss_pressure / (2 * 10000))
                 loss_a0 = self.compute_a0_loss()
                 loss += 1000 * loss_a0
                 loss.backward()
@@ -1397,11 +1393,7 @@ class COW(object):
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += (
-                    lambda_bif
-                    * (4*500 * loss_mass + loss_pressure / (2*10000))
-                    
-                )
+                loss += lambda_bif * (4 * 500 * loss_mass + loss_pressure / (2 * 10000))
                 loss_a0 = self.compute_a0_loss()
                 loss += 1000 * loss_a0
 
@@ -1480,7 +1472,13 @@ class COW(object):
                     los_a, _, _ = self.l2_loss(g, out[:, 1], y_true[:, 1])
                     los_p, _, _ = self.l2_loss(g, out[:, 0], y_true[:, 0])
                     los_u, _, _ = self.l2_loss(g, out[:, 2], y_true[:, 2])
-                    los_q , _, _, = self.l2_loss(g, out[:,1] * out[:,2], y_true[:,1] * y_true[:,2])
+                    (
+                        los_q,
+                        _,
+                        _,
+                    ) = self.l2_loss(
+                        g, out[:, 1] * out[:, 2], y_true[:, 1] * y_true[:, 2]
+                    )
 
                     tbl.add_data(
                         artery.name,
@@ -1490,6 +1488,51 @@ class COW(object):
                         los_q.item(),
                     )
         wandb.log({"Loss table": tbl})
+
+    def get_validation(self, arteries: dict):
+        """
+        Function computes validation statistics for plotting
+        """
+        with torch.no_grad():
+            for idx, artery in enumerate(self.arteries):
+                for batch, ids in self.loader_GNOT(1, [idx]):
+                    g, u_p, g_u = batch
+                    g, u_p, g_u = (
+                        g.to(self.device),
+                        u_p.to(self.device),
+                        g_u.to(self.device),
+                    )
+
+                    g.ndata["x"] = self.normalizer_x.transform(
+                        g.ndata["x"], inverse=False
+                    )
+                    u_p = self.normalizer_theta.transform(u_p, inverse=False)
+
+                    g, u_p, g_u = (
+                        g.to(self.device),
+                        u_p.to(self.device),
+                        g_u.to(self.device),
+                    )
+
+                    out = self.model_surrogate(g, u_p, g_u)
+                    out = self.normalizer_y.transform(out, inverse=True)
+                    y_true = g.ndata["y"].squeeze().to(self.device)
+                    los_a, _, _ = self.l2_loss(g, out[:, 1], y_true[:, 1])
+                    los_p, _, _ = self.l2_loss(g, out[:, 0], y_true[:, 0])
+                    los_u, _, _ = self.l2_loss(g, out[:, 2], y_true[:, 2])
+                    (
+                        los_q,
+                        _,
+                        _,
+                    ) = self.l2_loss(
+                        g, out[:, 1] * out[:, 2], y_true[:, 1] * y_true[:, 2]
+                    )
+                    arteries[artery.name]["Area"].append(los_a.item())
+                    arteries[artery.name]["Pressure"].append(los_p.item())
+                    arteries[artery.name]["Velocity"].append(los_u.item())
+                    arteries[artery.name]["Flow"].append(los_q.item())
+
+            return arteries
 
     def compute_beta(self, r0: float):
         """

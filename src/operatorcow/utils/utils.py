@@ -555,3 +555,117 @@ def binterp1d(x, y, xnew, eps=1e-9):
     ynew = y_sel + slopes_sel * (xnew.unsqueeze(-1) - x_sel)
 
     return ynew
+
+
+def get_arteries_dict():
+    arteries = {
+        "L_int_carotid_I": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "R_int_carotid_I": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "Basilar": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "L_int_carotid_II": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "R_int_carotid_II": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "L_PcoA": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "R_PcoA": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "L_MCA": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "R_MCA": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "L_ACA_A1": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "R_ACA_A1": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "L_PCA_P1": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "R_PCA_P1": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "L_ACA_A2": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "R_ACA_A2": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "AcoA": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "L_PCA_P2": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+        "R_PCA_P2": {
+            "Area": [],
+            "Pressure": [],
+            "Velocity": [],
+            "Flow": [],
+        },
+    }
+    return arteries
