@@ -1385,8 +1385,8 @@ class COW(object):
 
                 loss += (
                     lambda_bif
-                    * (500 * loss_mass + loss_pressure / 10000)
-                    / len(self.joints)
+                    * (4*500 * loss_mass + loss_pressure /(2 * 10000))
+                   
                 )
                 loss_a0 = self.compute_a0_loss()
                 loss += 1000 * loss_a0
@@ -1399,8 +1399,8 @@ class COW(object):
 
                 loss += (
                     lambda_bif
-                    * (500 * loss_mass + loss_pressure / 10000)
-                    / len(self.joints)
+                    * (4*500 * loss_mass + loss_pressure / (2*10000))
+                    
                 )
                 loss_a0 = self.compute_a0_loss()
                 loss += 1000 * loss_a0
@@ -1451,7 +1451,7 @@ class COW(object):
 
     def log_validation(self):
         tbl = wandb.Table(
-            columns=["Artery", "rL2 Area", "rL2 Pressure", "rL2 Velocity"]
+            columns=["Artery", "rL2 Area", "rL2 Pressure", "rL2 Velocity", "rL2 Flow"]
         )
         with torch.no_grad():
             for idx, artery in enumerate(self.arteries):
@@ -1480,12 +1480,14 @@ class COW(object):
                     los_a, _, _ = self.l2_loss(g, out[:, 1], y_true[:, 1])
                     los_p, _, _ = self.l2_loss(g, out[:, 0], y_true[:, 0])
                     los_u, _, _ = self.l2_loss(g, out[:, 2], y_true[:, 2])
+                    los_q , _, _, = self.l2_loss(g, out[:,1] * out[:,2], y_true[:,1] * y_true[:,2])
 
                     tbl.add_data(
                         artery.name,
                         los_a.item(),
                         los_p.item(),
                         los_u.item(),
+                        los_q.item(),
                     )
         wandb.log({"Loss table": tbl})
 

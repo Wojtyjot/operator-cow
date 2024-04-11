@@ -24,7 +24,7 @@ wandb:
     - development
 
 data:
-  data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/RESULTS_261/
+  data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/RESULTS_1002/
   joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
   batch_size: 18
 
@@ -66,7 +66,7 @@ inverse:
   max_iters: 2000
   eps: 0.000006
   batch_size: 18
-  lr: 1
+  lr: 0.5
   log_every: 100
 
 
