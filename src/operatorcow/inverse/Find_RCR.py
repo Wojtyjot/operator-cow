@@ -2,6 +2,7 @@ import multiprocessing
 
 import numpy as np
 import scipy.integrate
+from COW import COW
 
 # implementation based on https://github.com/PredictiveIntelligenceLab/1DBloodFlowPINNs
 
@@ -151,7 +152,7 @@ def search_params_parallel(R, C, t, p_exact, p, nn, R1, p_inf, T, aa, bb):
     return best_R, best_C, error, p_
 
 
-def find_windkessel(an: Artery_network, num_iters: int):
+def find_windkessel(cow: COW, num_iters: int):
     """
     Function performs adaptive parameter search for windkessel model
 
@@ -165,36 +166,29 @@ def find_windkessel(an: Artery_network, num_iters: int):
         Z (np.array): array of Z values for each artery
     """
     R2, C, Z = (
-        np.zeros(an.get_num_arteries()),
-        np.zeros(an.get_num_arteries()),
-        np.zeros(an.get_num_arteries()),
+        np.zeros(cow.get_num_arteries()),
+        np.zeros(cow.get_num_arteries()),
+        np.zeros(cow.get_num_arteries()),
     )
     p_inf = 666.5
     rho = 1050.0
-    out_pred_dict = an.get_outlets_predictions()
+    out_pred_dict = cow.get_outlets_predictions()
 
     for key, value in out_pred_dict.items():
-        A, u, p, x, t = value
-        A, u, p, x, t = (
-            A.detach().numpy(),
-            u.detach().numpy(),
-            p.detach().numpy(),
-            x.detach().numpy(),
-            t.detach().numpy(),
-        )
-        A, u, p, x, t = (
+        A, u, p, t = value
+
+        A, u, p, t = (
             A.squeeze(),
             u.squeeze(),
             p.squeeze(),
-            x.squeeze(),
             t.squeeze(),
         )
         Q = np.multiply(A, u)
-        T = t.max()
+        T = np.max(t)
         p_exact = p
         p = p_exact[:]
         NN = Q.shape[0]
-        z = compute_characteristic_impedance(an.get_artery(key), rho)
+        z = compute_characteristic_impedance(cow.get_artery(int(key)), rho)
 
         # compute fft
         aa, bb = get_fft(Q, T)
@@ -252,10 +246,13 @@ def compute_c0(r0: float, beta: float, rho: float):
     return np.sqrt(beta / (2 * rho * np.sqrt(np.pi * r0**2)))
 
 
-def compute_characteristic_impedance(Artery: Artery, rho: float):
+def compute_characteristic_impedance(Artery, rho: float):
     """
     Function computes characteristic impedance for artery
     """
-    beta = compute_beta(Artery.get_Rd())
-    c0 = compute_c0(Artery.get_Rd(), beta, rho)
-    return rho * c0 / (np.pi * Artery.get_Rd() ** 2)
+    beta = compute_beta(Artery.get_r0() * 1e-2)
+    c0 = compute_c0(Artery.get_r0() * 1e-2, beta, rho)
+    return rho * c0 / (np.pi * (Artery.get_r0() * 1e-2) ** 2)
+
+
+##### UWAGA NA JEDNOSTKI DO SOLVERA !!!! CHYBA SA SI !!!!

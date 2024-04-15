@@ -1,4 +1,5 @@
 import logging
+import sys
 from pathlib import Path
 
 import hydra
@@ -9,6 +10,7 @@ import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
 from inverse.COW import COW
+from inverse.Find_RCR import find_windkessel
 from log_plots import plot_predictions
 from models.ae import MLAE
 from models.cgpt import CGPT
@@ -20,7 +22,6 @@ from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
-import sys
 
 # from operatorcow.inverse.inverse import optimize_input_test
 
@@ -225,10 +226,12 @@ def main(config: DictConfig) -> None:
     for subfolder in val_path.iterdir():
         if subfolder.is_dir():
             arteries_log_save = get_arteries_dict()
-            fig_path = '/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/' + str(subfolder.name)
+            fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/" + str(
+                subfolder.name
+            )
             if not Path(fig_path).exists():
                 Path(fig_path).mkdir(parents=True, exist_ok=True)
-            
+
             d_p = str(subfolder.resolve()) + "/"
             cow = COW(
                 model_surrogate=model_surrogate,
@@ -256,6 +259,13 @@ def main(config: DictConfig) -> None:
                 lambda_mes=config.inverse.lambda_mes,
                 log_every=config.inverse.log_every,
             )
+            # estimate windkessel and perform simulation etc.
+            R2, C, Z = find_windkessel(
+                cow, 5
+            )  # need to check for opimal num_simulations
+            # 5 in paper ML in cardiovascular flows
+
+            cow.ROM_simulation(path_to_csv, path_to_new_joints, R2, C, Z)
             arteries_log = cow.get_validation(arteries_log)
             arteries_log_save = cow.get_validation(arteries_log_save)
             L2s.append(L2)
@@ -266,9 +276,9 @@ def main(config: DictConfig) -> None:
 
             print(f"Validation data: {subfolder}")
             print(L2)
-            i +=1
+            i += 1
 
-            #if i == 1:
+            # if i == 1:
             #    break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])

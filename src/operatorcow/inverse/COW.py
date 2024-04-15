@@ -1,4 +1,5 @@
 import gc
+import os
 import sys
 from pathlib import Path
 from typing import *
@@ -11,10 +12,11 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import WeightedLpRelLoss
+from Find_RCR import find_windkessel
 from log_plots import plot_predictions
+from ROM.utils import create_Julia_file, create_simulation_script, run_simulation
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
-import os
 
 ## Wszystko musi byc na same device
 # artery musi zwracać wszystkie dane potrzebne do obliczen
@@ -106,7 +108,6 @@ class Artery(object):
                 self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
                 self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
 
-
             else:
                 self.u_bc_latent = (
                     torch.randn(1, 16).to(self.device).requires_grad_(True)
@@ -118,7 +119,6 @@ class Artery(object):
                 self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze())
                 self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
                 self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
-
 
         else:
 
@@ -339,25 +339,36 @@ class Artery(object):
 
     def get_a0_rec(self):
         return self.a0_rec
-    
+
     def get_true_u_in(self):
         return self.u_in_true
-    
+
     def set_true_u_in(self, u_in_true):
         self.u_in_true = u_in_true
-    
+
     def get_true_a_in(self):
         return self.a_in_true
-    
+
     def set_true_a_in(self, a_in_true):
         self.a_in_true = a_in_true
-    
+
     def get_true_p_in(self):
         return self.p_in_true
-    
+
     def set_true_p_in(self, p_in_true):
         self.p_in_true = p_in_true
-    
+
+    def is_root(self):
+        return self.root
+
+    def get_T(self):
+        return self.T
+
+    def get_r0(self):
+        return torch.sqrt(self.a0[0] / torch.pi)
+
+    def get_t(self):
+        return self.g.ndata["x"][:100, 1]
 
 
 class COW(object):
@@ -421,8 +432,8 @@ class COW(object):
         self.optimizer_full = None
         self.create_optimizer(lr, "RT")
         # self.propagate_SV()
-        #print(f"RT: {self.RT_true}")
-        #print(f"CT: {self.CT_true}")
+        # print(f"RT: {self.RT_true}")
+        # print(f"CT: {self.CT_true}")
         # sys.exit()
         self.propagate_CT()
         self.propagate_RT()
@@ -514,10 +525,10 @@ class COW(object):
                 "R_ACA_A1",
                 "L_PCA_P1",
                 "R_PCA_P1",
-                #"L_ACA_A2",
-                #"R_ACA_A2",
-                #"L_PCA_P2",
-                #"R_PCA_P2",
+                # "L_ACA_A2",
+                # "R_ACA_A2",
+                # "L_PCA_P2",
+                # "R_PCA_P2",
             ]:
                 self.arteries.append(
                     Artery(
@@ -577,19 +588,18 @@ class COW(object):
             )
         return joints
 
-    def create_optimizer(self, lr: float = 0.5, optim:str = "RT"):
+    def create_optimizer(self, lr: float = 0.5, optim: str = "RT"):
         """
         Function creates a single optimizer for all arterial parameters
         """
         # TODO test z LBFGS tylko colsure trzeba zdefiniowac
         if optim not in ["RT", "MES", "NON_MES", "FULL"]:
             raise ValueError("Optimizer not recognized")
-        
 
         if optim == "RT":
             p = [self.RT.requires_grad_(True)]
             self.optimizer_RT = torch.optim.Adam(p, lr=lr)
-        
+
         elif optim == "MES":
             p = []
 
@@ -598,7 +608,7 @@ class COW(object):
                     p.extend(artery.get_parameters())
             p.extend([self.RT.requires_grad_(True)])
             self.optimizer_mes = torch.optim.Adam(p, lr=lr)
-        
+
         elif optim == "NON_MES":
             p = []
             for artery in self.arteries:
@@ -614,11 +624,10 @@ class COW(object):
                     p.extend(artery.get_parameters())
             p.extend([self.RT.requires_grad_(True)])
             self.optimizer_full = torch.optim.Adam(p, lr=lr)
-        
 
-        #p2 = []
-        #p3 = []
-        #for artery in self.arteries:
+        # p2 = []
+        # p3 = []
+        # for artery in self.arteries:
         #    if artery.get_parameters() is not None and artery.has_mesurement():
         #        p.extend(artery.get_parameters())
         #    elif artery.get_parameters() is not None and not artery.has_mesurement():
@@ -627,19 +636,19 @@ class COW(object):
         #    if artery.get_parameters() is not None:
         #        p3.extend(artery.get_parameters())
         # print(self.SV.requires_grad_(True).is_leaf)
-        #p.extend([self.RT.requires_grad_(True)])
-        #p2.extend([self.RT.requires_grad_(True)])
-        #p3.extend([self.RT.requires_grad_(True)])
-        #print(len(p))
-        #print(len(p2))
-        #print(len(p3))
-        #p4 = [self.RT.requires_grad_(True)]
+        # p.extend([self.RT.requires_grad_(True)])
+        # p2.extend([self.RT.requires_grad_(True)])
+        # p3.extend([self.RT.requires_grad_(True)])
+        # print(len(p))
+        # print(len(p2))
+        # print(len(p3))
+        # p4 = [self.RT.requires_grad_(True)]
         # p5 = [self.CT.requires_grad_(True)]
         # self.optimizer_ct = torch.optim.Adam(p5, lr=lr)
-        #self.optimizer_tr = torch.optim.Adam(p4, lr=lr)
-        #self.optimizer_mes = torch.optim.Adam(p, lr=lr)
-        #self.optimizer_non_mes = torch.optim.Adam(p2, lr=lr)
-        #self.optimizer_full = torch.optim.Adam(p3, lr=lr)
+        # self.optimizer_tr = torch.optim.Adam(p4, lr=lr)
+        # self.optimizer_mes = torch.optim.Adam(p, lr=lr)
+        # self.optimizer_non_mes = torch.optim.Adam(p2, lr=lr)
+        # self.optimizer_full = torch.optim.Adam(p3, lr=lr)
 
     def loader_GNOT(self, batch_size, batch_idx=None):
         # Loader dla gnota req loss mozna w jednym batchu?
@@ -790,7 +799,7 @@ class COW(object):
                 loss += los_.item()
                 out = out.reshape(len(idx), -1, 3)
                 y_true = y_true.reshape(len(idx), -1, 3)
-                #for index, j in enumerate(idx):
+                # for index, j in enumerate(idx):
                 #    plot_predictions(
                 #        out[index, :, :].detach().cpu().numpy(),
                 #        y_true[index, :, :].detach().cpu().numpy(),
@@ -1442,8 +1451,8 @@ class COW(object):
                 loss += loss_a0
                 loss.backward()
                 self.optimizer_RT.step()
-                #print(f"RT = {self.RT}")
-                #print(f"CT = {self.CT}")
+                # print(f"RT = {self.RT}")
+                # print(f"CT = {self.CT}")
 
             elif it < 1000 and it >= 2:
                 if self.optimizer_mes is None:
@@ -1453,7 +1462,7 @@ class COW(object):
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
                 loss += 1e-20 * lambda_bif * (loss_mass + loss_pressure)
                 loss_a0 = self.compute_a0_loss()
-                loss += 10000* loss_a0
+                loss += 10000 * loss_a0
                 loss.backward()
                 self.optimizer_mes.step()
 
@@ -1462,7 +1471,7 @@ class COW(object):
                     self.create_optimizer(self.lr, "NON_MES")
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += lambda_bif * (5000 * loss_mass + 0.01*loss_pressure / 1e5)
+                loss += lambda_bif * (5000 * loss_mass + 0.01 * loss_pressure / 1e5)
                 loss_a0 = self.compute_a0_loss()
                 loss += 10000 * loss_a0
                 loss.backward()
@@ -1474,7 +1483,7 @@ class COW(object):
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += lambda_bif * (5000 * loss_mass + 0.01*loss_pressure / 1e5)
+                loss += lambda_bif * (5000 * loss_mass + 0.01 * loss_pressure / 1e5)
                 loss_a0 = self.compute_a0_loss()
                 loss += 10000 * loss_a0
 
@@ -1488,9 +1497,9 @@ class COW(object):
             self.update_CT()
             self.propagate_CT()
 
-            #print(loss.item())
+            # print(loss.item())
 
-            #if self.track and it % log_every == 0:
+            # if self.track and it % log_every == 0:
             #    wandb.log(
             #        {
             #            "loss": loss.item(),
@@ -1516,8 +1525,8 @@ class COW(object):
             it += 1
 
         validation_loss = self.compute_validation_l2_loss(batch_size)
-        #wandb.log({"Validation loss": validation_loss})
-        #self.log_validation()
+        # wandb.log({"Validation loss": validation_loss})
+        # self.log_validation()
 
         # iter += 1
         return validation_loss
@@ -1624,7 +1633,7 @@ class COW(object):
         k3 = 86.5e5
         Eh = r0 * (k1 * torch.exp(k2 * r0) + k3)
         return 4 / 3 * torch.sqrt(torch.Tensor([torch.pi]).to(self.device)) * Eh
-    
+
     def dump_plots(self, path: str):
         """
         function creates plots of u, a, p  and flow for each artery
@@ -1670,7 +1679,6 @@ class COW(object):
             plt.savefig(os.path.join(path, f"{artery.name}.png"))
             plt.close()
 
-
     def dump_params(self, path: str):
         """
         Function dumps parameters of simulation HR, RT_true, CT_true, RT rec, CT rec
@@ -1710,7 +1718,9 @@ class COW(object):
                 flow_mean_pred = np.mean(a_in * u_in)
                 flow_max_pred = np.max(a_in * u_in)
                 flow_min_pred = np.min(a_in * u_in)
-                MFV_true = np.min(u_in_true) + (np.max(u_in_true) - np.min(u_in_true)) / 3
+                MFV_true = (
+                    np.min(u_in_true) + (np.max(u_in_true) - np.min(u_in_true)) / 3
+                )
                 PI_true = (np.max(u_in_true) - np.min(u_in_true)) / MFV_true
                 flow_mean_true = np.mean(a_in_true * u_in_true)
                 flow_max_true = np.max(a_in_true * u_in_true)
@@ -1756,19 +1766,106 @@ class COW(object):
             for artery in self.arteries:
                 f.write(f"Artery {artery.name}\n")
                 f.write(f"Area\n")
-                f.write(f"Relative L2 error = {np.mean(arteries[artery.name]['Area'])}\n")
+                f.write(
+                    f"Relative L2 error = {np.mean(arteries[artery.name]['Area'])}\n"
+                )
                 f.write(f"Pressure\n")
-                f.write(f"Relative L2 error = {np.mean(arteries[artery.name]['Pressure'])}\n")
+                f.write(
+                    f"Relative L2 error = {np.mean(arteries[artery.name]['Pressure'])}\n"
+                )
                 f.write(f"Velocity\n")
-                f.write(f"Relative L2 error = {np.mean(arteries[artery.name]['Velocity'])}\n")
+                f.write(
+                    f"Relative L2 error = {np.mean(arteries[artery.name]['Velocity'])}\n"
+                )
                 f.write(f"Flow\n")
-                f.write(f"Relative L2 error = {np.mean(arteries[artery.name]['Flow'])}\n")
+                f.write(
+                    f"Relative L2 error = {np.mean(arteries[artery.name]['Flow'])}\n"
+                )
 
+    def get_num_arteries(self):
+        """
+        Function returns number of arteries in cow
+        """
+        return len(self.arteries)
 
-               
+    def get_artery(self, idx):
+        """
+        Returns artery with idx
+        """
+        return self.arteries[idx]
 
-        
+    def get_r0s(self):
+        """
+        Function returns r0s for all arteries
 
+        and transforms from cm -=> m
+        """
+        r0s = list()
+        for artery in self.arteries:
+            r0s.append(artery.get_r0() * 1e-2)
+        return r0s
 
-        
-            
+    ### need some function for outlet predictions
+
+    def get_outlet_predictions(self):
+        """
+        Function returns dict with outlet predictions
+        """
+        out = dict()
+        for idx, artery in enumerate(self.arteries):
+            if artery.is_outlet():
+                # need to transfrom to si units
+                out[idx] = (
+                    artery.get_a_out().detach().cpu().numpy() * 1e-4,
+                    artery.get_u_out().detach().cpu().numpy() * 1e-2,
+                    artery.get_p_out().detach().cpu().numpy() * 10,
+                    artery.get_t().detach().cpu().numpy(),
+                )
+        return out
+
+    def create_inlet_file(self):
+        """
+        Function creates inlet dat file for openBF simulation
+
+        needs flow in m^3/s andtimesteps in seconds
+        """
+        for artery in self.arteries:
+            if artery.is_root():
+                u_in = artery.get_u_in().detach().cpu().numpy()
+                a_in = artery.get_a_in().detach().cpu().numpy()
+                flow = u_in * a_in  # in cm^3/s need to convert
+                flow = flow * 1e-6
+                T = artery.get_T()
+                t = np.linspace(0, T, len(flow))
+                save_folder_path = "/home/wojciech/Doppler/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/"
+                with open(
+                    os.path.join(save_folder_path, f"{artery.name}_inlet.dat"), "w"
+                ) as f:
+                    for i in range(len(flow)):
+                        f.write(f"{t[i]} {flow[i]}\n")
+
+    def ROM_simulation(self, csv_path: str, joints_path: str, R2, C, Z):
+        """
+        Function estimates windessel parameters for arteries,
+        performs rom simulation and creates fake "mesurements"
+        for AcoA and pcoms
+        """
+        self.create_inlet_file()
+        df = pd.read_csv(csv_path)
+        #### need to create df that is base for creatig scripts etc
+        r0s = self.get_r0s()
+        df["Rp"] = r0s
+        df["Rd"] = r0s
+        df["R1"] = Z
+        df["R2"] = R2
+        df["C"] = C
+
+        print("Creating simulation script...")
+        create_simulation_script(df, project_name="Placeholder")
+        print("Simulation script created")
+        print("Creating Julia file")
+        create_Julia_file(project_name="Placeholder", src="path_to_src")
+        print("Julia file created")
+        print("Running simulation")
+        run_simulation(project_name="Placeholder")
+        print("Simulation finished")

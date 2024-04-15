@@ -11,7 +11,7 @@ from log_plots import plot_predictions
 from utils.utils import MultipleTensors
 
 
-def get_BC(velocity: torch.Tensor, device: str, T:float = 1.0) -> torch.Tensor:
+def get_BC(velocity: torch.Tensor, device: str, T: float = 1.0) -> torch.Tensor:
     """
     Function computes inflow boundary conditon from velocity array
 
@@ -319,8 +319,8 @@ def optimize_input_test_VANO(
 
     theta = normalizer_up.transform(theta, inverse=True).squeeze()
     # setup optimizable parameters:
-    #SV_rec = np.random.uniform(100, 140)
-    #SV_rec = torch.Tensor([SV_rec]).to(device).requires_grad_()
+    # SV_rec = np.random.uniform(100, 140)
+    # SV_rec = torch.Tensor([SV_rec]).to(device).requires_grad_()
 
     # initialize random bc
     u_bc_latent = torch.randn(16, 1).to(device).requires_grad_()
@@ -400,7 +400,7 @@ def optimize_input_test_VANO(
         u0 = u0.unsqueeze(0)
         # u0_pred = u0_pred.unsqueeze(0)
         a0 = a0.unsqueeze(0)
-        inputs_f_pred = MultipleTensors([i for i in (bc ,a0)])
+        inputs_f_pred = MultipleTensors([i for i in (bc, a0)])
 
         # forward pass
 
