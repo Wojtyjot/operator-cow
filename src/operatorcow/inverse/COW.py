@@ -14,6 +14,7 @@ from data_utils import WeightedLpRelLoss
 from log_plots import plot_predictions
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
+import os
 
 ## Wszystko musi byc na same device
 # artery musi zwracać wszystkie dane potrzebne do obliczen
@@ -85,6 +86,9 @@ class Artery(object):
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
                 self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+                self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze())
+                self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
+                self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
 
             elif self.root:
                 self.u_bc = (
@@ -98,6 +102,10 @@ class Artery(object):
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
                 self.parameters = None
                 self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+                self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze())
+                self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
+                self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
+
 
             else:
                 self.u_bc_latent = (
@@ -107,6 +115,10 @@ class Artery(object):
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
                 self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+                self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze())
+                self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
+                self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
+
 
         else:
 
@@ -327,6 +339,25 @@ class Artery(object):
 
     def get_a0_rec(self):
         return self.a0_rec
+    
+    def get_true_u_in(self):
+        return self.u_in_true
+    
+    def set_true_u_in(self, u_in_true):
+        self.u_in_true = u_in_true
+    
+    def get_true_a_in(self):
+        return self.a_in_true
+    
+    def set_true_a_in(self, a_in_true):
+        self.a_in_true = a_in_true
+    
+    def get_true_p_in(self):
+        return self.p_in_true
+    
+    def set_true_p_in(self, p_in_true):
+        self.p_in_true = p_in_true
+    
 
 
 class COW(object):
@@ -362,6 +393,9 @@ class COW(object):
         # )
         self.RT_true = None
         self.CT_true = None
+        self.HR = None
+        self.lr = lr
+        torch.manual_seed(2137)
         self.RT = (
             torch.Tensor([np.random.uniform(62770839.96, 194904651.43)])
             .to(device)
@@ -382,10 +416,13 @@ class COW(object):
         self.joints_path = joints_path  # TODO
         self.l2_loss = WeightedLpRelLoss(p=2, component="all", normalizer=None)
         self.load_data(data_path)
-        self.create_optimizer(lr)
+        self.optimizer_mes = None
+        self.optimizer_non_mes = None
+        self.optimizer_full = None
+        self.create_optimizer(lr, "RT")
         # self.propagate_SV()
-        print(f"RT: {self.RT_true}")
-        print(f"CT: {self.CT_true}")
+        #print(f"RT: {self.RT_true}")
+        #print(f"CT: {self.CT_true}")
         # sys.exit()
         self.propagate_CT()
         self.propagate_RT()
@@ -440,6 +477,8 @@ class COW(object):
                 self.RT_true = theta[-2]
             if self.CT_true is None:
                 self.CT_true = theta[-1]
+            if self.HR is None:
+                self.HR = theta[-3]
             g = dgl.DGLGraph()
             g.add_nodes(X.shape[0])
             g.ndata["x"] = torch.from_numpy(X).float()
@@ -475,10 +514,10 @@ class COW(object):
                 "R_ACA_A1",
                 "L_PCA_P1",
                 "R_PCA_P1",
-                "L_ACA_A2",
-                "R_ACA_A2",
-                "L_PCA_P2",
-                "R_PCA_P2",
+                #"L_ACA_A2",
+                #"R_ACA_A2",
+                #"L_PCA_P2",
+                #"R_PCA_P2",
             ]:
                 self.arteries.append(
                     Artery(
@@ -538,36 +577,69 @@ class COW(object):
             )
         return joints
 
-    def create_optimizer(self, lr: float = 0.5):
+    def create_optimizer(self, lr: float = 0.5, optim:str = "RT"):
         """
         Function creates a single optimizer for all arterial parameters
         """
         # TODO test z LBFGS tylko colsure trzeba zdefiniowac
-        p = []
-        p2 = []
-        p3 = []
-        for artery in self.arteries:
-            if artery.get_parameters() is not None and artery.has_mesurement():
-                p.extend(artery.get_parameters())
-            elif artery.get_parameters() is not None and not artery.has_mesurement():
-                p2.extend(artery.get_parameters())
+        if optim not in ["RT", "MES", "NON_MES", "FULL"]:
+            raise ValueError("Optimizer not recognized")
+        
 
-            if artery.get_parameters() is not None:
-                p3.extend(artery.get_parameters())
+        if optim == "RT":
+            p = [self.RT.requires_grad_(True)]
+            self.optimizer_RT = torch.optim.Adam(p, lr=lr)
+        
+        elif optim == "MES":
+            p = []
+
+            for artery in self.arteries:
+                if artery.get_parameters() is not None and artery.has_mesurement():
+                    p.extend(artery.get_parameters())
+            p.extend([self.RT.requires_grad_(True)])
+            self.optimizer_mes = torch.optim.Adam(p, lr=lr)
+        
+        elif optim == "NON_MES":
+            p = []
+            for artery in self.arteries:
+                if artery.get_parameters() is not None and not artery.has_mesurement():
+                    p.extend(artery.get_parameters())
+            p.extend([self.RT.requires_grad_(True)])
+            self.optimizer_non_mes = torch.optim.Adam(p, lr=lr)
+
+        elif optim == "FULL":
+            p = []
+            for artery in self.arteries:
+                if artery.get_parameters() is not None:
+                    p.extend(artery.get_parameters())
+            p.extend([self.RT.requires_grad_(True)])
+            self.optimizer_full = torch.optim.Adam(p, lr=lr)
+        
+
+        #p2 = []
+        #p3 = []
+        #for artery in self.arteries:
+        #    if artery.get_parameters() is not None and artery.has_mesurement():
+        #        p.extend(artery.get_parameters())
+        #    elif artery.get_parameters() is not None and not artery.has_mesurement():
+        #        p2.extend(artery.get_parameters())
+        #
+        #    if artery.get_parameters() is not None:
+        #        p3.extend(artery.get_parameters())
         # print(self.SV.requires_grad_(True).is_leaf)
-        p.extend([self.RT.requires_grad_(True)])
-        p2.extend([self.RT.requires_grad_(True)])
-        p3.extend([self.RT.requires_grad_(True)])
-        print(len(p))
-        print(len(p2))
-        print(len(p3))
-        p4 = [self.RT.requires_grad_(True)]
+        #p.extend([self.RT.requires_grad_(True)])
+        #p2.extend([self.RT.requires_grad_(True)])
+        #p3.extend([self.RT.requires_grad_(True)])
+        #print(len(p))
+        #print(len(p2))
+        #print(len(p3))
+        #p4 = [self.RT.requires_grad_(True)]
         # p5 = [self.CT.requires_grad_(True)]
         # self.optimizer_ct = torch.optim.Adam(p5, lr=lr)
-        self.optimizer_tr = torch.optim.Adam(p4, lr=lr)
-        self.optimizer_mes = torch.optim.Adam(p, lr=lr)
-        self.optimizer_non_mes = torch.optim.Adam(p2, lr=lr)
-        self.optimizer_full = torch.optim.Adam(p3, lr=lr)
+        #self.optimizer_tr = torch.optim.Adam(p4, lr=lr)
+        #self.optimizer_mes = torch.optim.Adam(p, lr=lr)
+        #self.optimizer_non_mes = torch.optim.Adam(p2, lr=lr)
+        #self.optimizer_full = torch.optim.Adam(p3, lr=lr)
 
     def loader_GNOT(self, batch_size, batch_idx=None):
         # Loader dla gnota req loss mozna w jednym batchu?
@@ -718,12 +790,12 @@ class COW(object):
                 loss += los_.item()
                 out = out.reshape(len(idx), -1, 3)
                 y_true = y_true.reshape(len(idx), -1, 3)
-                for index, j in enumerate(idx):
-                    plot_predictions(
-                        out[index, :, :].detach().cpu().numpy(),
-                        y_true[index, :, :].detach().cpu().numpy(),
-                        str(j),
-                    )
+                #for index, j in enumerate(idx):
+                #    plot_predictions(
+                #        out[index, :, :].detach().cpu().numpy(),
+                #        y_true[index, :, :].detach().cpu().numpy(),
+                #        str(j),
+                #    )
         return loss / i
 
     def get_reg_loss(
@@ -1349,11 +1421,14 @@ class COW(object):
         """
         it = 0
         for i in range(max_iters):
-
-            self.optimizer_non_mes.zero_grad()
-            self.optimizer_full.zero_grad()
-            self.optimizer_mes.zero_grad()
-            self.optimizer_tr.zero_grad()
+            if self.optimizer_full is not None:
+                self.optimizer_full.zero_grad()
+            if self.optimizer_non_mes is not None:
+                self.optimizer_non_mes.zero_grad()
+            if self.optimizer_mes is not None:
+                self.optimizer_mes.zero_grad()
+            if self.optimizer_RT is not None:
+                self.optimizer_RT.zero_grad()
 
             loss = 0
 
@@ -1366,36 +1441,42 @@ class COW(object):
                 loss_a0 = self.compute_a0_loss()
                 loss += loss_a0
                 loss.backward()
-                self.optimizer_tr.step()
-                print(f"RT = {self.RT}")
-                print(f"CT = {self.CT}")
+                self.optimizer_RT.step()
+                #print(f"RT = {self.RT}")
+                #print(f"CT = {self.CT}")
 
-            elif it < 500 and it >= 2:
+            elif it < 1000 and it >= 2:
+                if self.optimizer_mes is None:
+                    self.create_optimizer(0.1, "MES")
 
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
                 loss += 1e-20 * lambda_bif * (loss_mass + loss_pressure)
                 loss_a0 = self.compute_a0_loss()
-                loss += loss_a0
+                loss += 10000* loss_a0
                 loss.backward()
                 self.optimizer_mes.step()
 
-            elif it >= 500 and it < 1000:
+            elif it <= 2000 and it >= 1000:
+                if self.optimizer_non_mes is None:
+                    self.create_optimizer(self.lr, "NON_MES")
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += lambda_bif * (4 * 500 * loss_mass + loss_pressure / (2 * 10000))
+                loss += lambda_bif * (5000 * loss_mass + 0.01*loss_pressure / 1e5)
                 loss_a0 = self.compute_a0_loss()
-                loss += 1000 * loss_a0
+                loss += 10000 * loss_a0
                 loss.backward()
                 self.optimizer_non_mes.step()
 
             else:
+                if self.optimizer_full is None:
+                    self.create_optimizer(self.lr, "FULL")
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += lambda_bif * (4 * 500 * loss_mass + loss_pressure / (2 * 10000))
+                loss += lambda_bif * (5000 * loss_mass + 0.01*loss_pressure / 1e5)
                 loss_a0 = self.compute_a0_loss()
-                loss += 1000 * loss_a0
+                loss += 10000 * loss_a0
 
                 try:
                     loss.backward()
@@ -1407,36 +1488,36 @@ class COW(object):
             self.update_CT()
             self.propagate_CT()
 
-            print(loss.item())
+            #print(loss.item())
 
-            if self.track and it % log_every == 0:
-                wandb.log(
-                    {
-                        "loss": loss.item(),
-                        # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
-                        # "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
-                        # "SV_loss": lambda_sv * self.compute_SV_loss(),
-                        "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
-                    }
-                )
-                # self.log_arteries()
-                print(f"val = {self.compute_validation_l2_loss(batch_size)}")
-                wandb.log(
-                    {
-                        # "SV": self.SV.item(),
-                        # "Validation loss": self.compute_validation_l2_loss(
-                        #     batch_size
-                        # ).item(),
-                    },
-                )
+            #if self.track and it % log_every == 0:
+            #    wandb.log(
+            #        {
+            #            "loss": loss.item(),
+            #            # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
+            #            # "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
+            #            # "SV_loss": lambda_sv * self.compute_SV_loss(),
+            #            "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
+            #        }
+            #    )
+            #    # self.log_arteries()
+            #    print(f"val = {self.compute_validation_l2_loss(batch_size)}")
+            #    wandb.log(
+            #        {
+            #            # "SV": self.SV.item(),
+            #            # "Validation loss": self.compute_validation_l2_loss(
+            #            #     batch_size
+            #            # ).item(),
+            #        },
+            #    )
 
             # if loss < eps:
             #    break
             it += 1
 
         validation_loss = self.compute_validation_l2_loss(batch_size)
-        wandb.log({"Validation loss": validation_loss})
-        self.log_validation()
+        #wandb.log({"Validation loss": validation_loss})
+        #self.log_validation()
 
         # iter += 1
         return validation_loss
@@ -1543,3 +1624,151 @@ class COW(object):
         k3 = 86.5e5
         Eh = r0 * (k1 * torch.exp(k2 * r0) + k3)
         return 4 / 3 * torch.sqrt(torch.Tensor([torch.pi]).to(self.device)) * Eh
+    
+    def dump_plots(self, path: str):
+        """
+        function creates plots of u, a, p  and flow for each artery
+        with true and predicted values at inlet with Title of artery name
+        and saves them to path with name artery_name.png
+
+        function makes use of artery.get_u_in(), artery.get_a_in(), artery.get_p_in()
+        """
+        for artery in self.arteries:
+            u_in = artery.get_u_in().detach().cpu().numpy()
+            a_in = artery.get_a_in().detach().cpu().numpy()
+            p_in = artery.get_p_in().detach().cpu().numpy()
+            u_in_true = artery.get_true_u_in().detach().cpu().numpy()
+            a_in_true = artery.get_true_a_in().detach().cpu().numpy()
+            p_in_true = artery.get_true_p_in().detach().cpu().numpy()
+
+            fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+            axs[0, 0].plot(u_in, label="Predicted")
+            axs[0, 0].plot(u_in_true, label="True")
+            axs[0, 0].set_title("Velocity")
+            axs[0, 0].set_ylabel("cm/s")
+            axs[0, 0].set_xlabel("time_step")
+            axs[0, 0].legend()
+            axs[0, 1].plot(a_in, label="Predicted")
+            axs[0, 1].plot(a_in_true, label="True")
+            axs[0, 1].set_title("Area")
+            axs[0, 1].set_ylabel("cm^2")
+            axs[0, 1].set_xlabel("time_step")
+            axs[0, 1].legend()
+            axs[1, 0].plot(p_in, label="Predicted")
+            axs[1, 0].plot(p_in_true, label="True")
+            axs[1, 0].set_title("Pressure")
+            axs[1, 0].set_ylabel("Baye")
+            axs[1, 0].set_xlabel("time_step")
+            axs[1, 0].legend()
+            axs[1, 1].plot(a_in * u_in, label="Predicted")
+            axs[1, 1].plot(a_in_true * u_in_true, label="True")
+            axs[1, 1].set_title("Flow")
+            axs[1, 1].set_ylabel("cm^3/s")
+            axs[1, 1].set_xlabel("time_step")
+            axs[1, 1].legend()
+            fig.suptitle(artery.name)
+            plt.savefig(os.path.join(path, f"{artery.name}.png"))
+            plt.close()
+
+
+    def dump_params(self, path: str):
+        """
+        Function dumps parameters of simulation HR, RT_true, CT_true, RT rec, CT rec
+        to txt file
+        """
+        with open(os.path.join(path, "params.txt"), "w") as f:
+            f.write(f"HR = {self.HR}\n")
+            f.write(f"RT_true = {self.RT_true}\n")
+            f.write(f"CT_true = {self.CT_true}\n")
+            f.write(f"RT_rec = {self.RT}\n")
+            f.write(f"CT_rec = {self.CT}\n")
+
+    def dump_statistics(self, path: str):
+        """
+        Function dumps statistics of predicted and true values of u, a, p
+
+        Pi, MFV, flow, u_max, u_min, flow_max, flow_min,
+        """
+        with open(os.path.join(path, "statistics.txt"), "w") as f:
+            for artery in self.arteries:
+                u_in = artery.get_u_in().detach().cpu().numpy()
+                a_in = artery.get_a_in().detach().cpu().numpy()
+                p_in = artery.get_p_in().detach().cpu().numpy()
+                u_in_true = artery.get_true_u_in().detach().cpu().numpy()
+                a_in_true = artery.get_true_a_in().detach().cpu().numpy()
+                p_in_true = artery.get_true_p_in().detach().cpu().numpy()
+                u_max = np.max(u_in)
+                u_min = np.min(u_in)
+                a_max = np.max(a_in)
+                a_min = np.min(a_in)
+                p_max = np.max(p_in)
+                p_min = np.min(p_in)
+                u_max_true = np.max(u_in_true)
+                u_min_true = np.min(u_in_true)
+                MFV_pred = np.min(u_in) + (np.max(u_in) - np.min(u_in)) / 3
+                PI_pred = (np.max(u_in) - np.min(u_in)) / MFV_pred
+                flow_mean_pred = np.mean(a_in * u_in)
+                flow_max_pred = np.max(a_in * u_in)
+                flow_min_pred = np.min(a_in * u_in)
+                MFV_true = np.min(u_in_true) + (np.max(u_in_true) - np.min(u_in_true)) / 3
+                PI_true = (np.max(u_in_true) - np.min(u_in_true)) / MFV_true
+                flow_mean_true = np.mean(a_in_true * u_in_true)
+                flow_max_true = np.max(a_in_true * u_in_true)
+                flow_min_true = np.min(a_in_true * u_in_true)
+
+                f.write(f"Artery {artery.name}\n")
+                f.write(f"Predicted\n")
+                f.write(f"u_max = {u_max}\n")
+                f.write(f"u_min = {u_min}\n")
+                f.write(f"p_max = {p_max}\n")
+                f.write(f"p_min = {p_min}\n")
+                f.write(f"flow_mean = {flow_mean_pred}\n")
+                f.write(f"flow_max = {flow_max_pred}\n")
+                f.write(f"flow_min = {flow_min_pred}\n")
+                f.write(f"MFV = {MFV_pred}\n")
+                f.write(f"PI = {PI_pred}\n")
+                f.write(f"True\n")
+                f.write(f"u_max = {u_max_true}\n")
+                f.write(f"u_min = {u_min_true}\n")
+                f.write(f"p_max = {p_max}\n")
+                f.write(f"p_min = {p_min}\n")
+                f.write(f"flow_mean = {flow_mean_true}\n")
+                f.write(f"flow_max = {flow_max_true}\n")
+                f.write(f"flow_min = {flow_min_true}\n")
+                f.write(f"MFV = {MFV_true}\n")
+                f.write(f"PI = {PI_true}\n")
+                f.write("differeces\n")
+                f.write(f"u_max_diff = {u_max - u_max_true}\n")
+                f.write(f"u_min_diff = {u_min - u_min_true}\n")
+                f.write(f"p_max_diff = {p_max - p_max}\n")
+                f.write(f"p_min_diff = {p_min - p_min}\n")
+                f.write(f"flow_mean_diff = {flow_mean_pred - flow_mean_true}\n")
+                f.write(f"flow_max_diff = {flow_max_pred - flow_max_true}\n")
+                f.write(f"flow_min_diff = {flow_min_pred - flow_min_true}\n")
+                f.write(f"MFV_diff = {MFV_pred - MFV_true}\n")
+                f.write(f"PI_diff = {PI_pred - PI_true}\n")
+
+    def dump_validation(self, path: str, arteries: dict):
+        """
+        function dumps validation statistics to path
+        """
+        with open(os.path.join(path, "validation.txt"), "w") as f:
+            for artery in self.arteries:
+                f.write(f"Artery {artery.name}\n")
+                f.write(f"Area\n")
+                f.write(f"Relative L2 error = {np.mean(arteries[artery.name]['Area'])}\n")
+                f.write(f"Pressure\n")
+                f.write(f"Relative L2 error = {np.mean(arteries[artery.name]['Pressure'])}\n")
+                f.write(f"Velocity\n")
+                f.write(f"Relative L2 error = {np.mean(arteries[artery.name]['Velocity'])}\n")
+                f.write(f"Flow\n")
+                f.write(f"Relative L2 error = {np.mean(arteries[artery.name]['Flow'])}\n")
+
+
+               
+
+        
+
+
+        
+            

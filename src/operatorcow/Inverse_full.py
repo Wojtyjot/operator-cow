@@ -20,6 +20,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
+import sys
 
 # from operatorcow.inverse.inverse import optimize_input_test
 
@@ -220,9 +221,15 @@ def main(config: DictConfig) -> None:
 
     val_path = Path(config.data.data_path)
     L2s = []
-
+    i = 0
     for subfolder in val_path.iterdir():
         if subfolder.is_dir():
+            arteries_log_save = get_arteries_dict()
+            fig_path = '/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/' + str(subfolder.name)
+            if not Path(fig_path).exists():
+                Path(fig_path).mkdir(parents=True, exist_ok=True)
+            
+            d_p = str(subfolder.resolve()) + "/"
             cow = COW(
                 model_surrogate=model_surrogate,
                 AE_model=None,
@@ -233,7 +240,7 @@ def main(config: DictConfig) -> None:
                 joints_path=config.data.joints_path,
                 lr=config.inverse.lr,
                 track=config.log,
-                data_path=subfolder,
+                data_path=d_p,
                 normalizer_u_bc=normalizer_u_bc,
                 model_VANO=VANO_model,
                 VANO=True,
@@ -250,10 +257,19 @@ def main(config: DictConfig) -> None:
                 log_every=config.inverse.log_every,
             )
             arteries_log = cow.get_validation(arteries_log)
+            arteries_log_save = cow.get_validation(arteries_log_save)
             L2s.append(L2)
+            cow.dump_plots(fig_path)
+            cow.dump_params(fig_path)
+            cow.dump_statistics(fig_path)
+            cow.dump_validation(fig_path, arteries_log_save)
 
             print(f"Validation data: {subfolder}")
             print(L2)
+            i +=1
+
+            #if i == 1:
+            #    break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
     L2s = np.array(L2s)

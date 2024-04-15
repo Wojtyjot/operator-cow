@@ -62,11 +62,11 @@ inverse:
   lambda_reg: 0.01
   lambda_bif: 0.1
   lambda_sv: 0.01
-  lambda_mes: 1.0
-  max_iters: 2000
+  lambda_mes: 10.0
+  max_iters: 3000
   eps: 0.000006
   batch_size: 18
-  lr: 0.5
+  lr: 0.01
   log_every: 100
 
 
