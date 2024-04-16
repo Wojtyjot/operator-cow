@@ -370,6 +370,9 @@ class Artery(object):
     def get_t(self):
         return self.g.ndata["x"][:100, 1]
 
+    def get_L(self):
+        return self.L
+
 
 class COW(object):
     """
@@ -1805,6 +1808,19 @@ class COW(object):
             r0s.append(artery.get_r0() * 1e-2)
         return r0s
 
+    def get_Ls(self):
+        """
+        Function return lengths of all arteries
+        and transforms them from cm -> m
+
+        Returns:
+            list: A list of artery lengths in meters.
+        """
+        Ls = list()
+        for artery in self.arteries:
+            Ls.append(artery.get_L() * 1e-2)
+        return Ls
+
     ### need some function for outlet predictions
 
     def get_outlet_predictions(self):
@@ -1844,7 +1860,7 @@ class COW(object):
                     for i in range(len(flow)):
                         f.write(f"{t[i]} {flow[i]}\n")
 
-    def ROM_simulation(self, csv_path: str, joints_path: str, R2, C, Z):
+    def ROM_simulation(self, csv_path: str, R2, C, Z):
         """
         Function estimates windessel parameters for arteries,
         performs rom simulation and creates fake "mesurements"
@@ -1854,18 +1870,20 @@ class COW(object):
         df = pd.read_csv(csv_path)
         #### need to create df that is base for creatig scripts etc
         r0s = self.get_r0s()
+        Ls = self.get_Ls()
         df["Rp"] = r0s
         df["Rd"] = r0s
         df["R1"] = Z
         df["R2"] = R2
         df["C"] = C
+        df["L"] = Ls
 
         print("Creating simulation script...")
-        create_simulation_script(df, project_name="Placeholder")
+        create_simulation_script(df, project_name="Inverse_ROM")
         print("Simulation script created")
         print("Creating Julia file")
-        create_Julia_file(project_name="Placeholder", src="path_to_src")
+        create_Julia_file(project_name="Inverse_ROM", src="path_to_src")
         print("Julia file created")
         print("Running simulation")
-        run_simulation(project_name="Placeholder")
+        run_simulation(project_name="Inverse_ROM")
         print("Simulation finished")

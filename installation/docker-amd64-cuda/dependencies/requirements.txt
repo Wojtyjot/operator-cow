@@ -9,3 +9,4 @@ networkx
 numpy
 dgl -f https://data.dgl.ai/wheels/cu121/repo.html
 dglgo -f https://data.dgl.ai/wheels-test/repo.html
+ruamel.yaml

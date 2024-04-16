@@ -264,8 +264,8 @@ def main(config: DictConfig) -> None:
                 cow, 5
             )  # need to check for opimal num_simulations
             # 5 in paper ML in cardiovascular flows
-
-            cow.ROM_simulation(path_to_csv, path_to_new_joints, R2, C, Z)
+            # TODO zmodyfikować csv BY były dobre jointy
+            cow.ROM_simulation(config.inverse.path_to_csv, R2, C, Z)
             arteries_log = cow.get_validation(arteries_log)
             arteries_log_save = cow.get_validation(arteries_log_save)
             L2s.append(L2)
