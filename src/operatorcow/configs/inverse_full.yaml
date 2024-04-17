@@ -68,6 +68,6 @@ inverse:
   batch_size: 18
   lr: 0.01
   log_every: 100
-  path_to_csv: Placeholder
+  path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
 
 

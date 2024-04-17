@@ -261,11 +261,25 @@ def main(config: DictConfig) -> None:
             )
             # estimate windkessel and perform simulation etc.
             R2, C, Z = find_windkessel(
-                cow, 5
+                cow, 10
             )  # need to check for opimal num_simulations
             # 5 in paper ML in cardiovascular flows
             # TODO zmodyfikować csv BY były dobre jointy
             cow.ROM_simulation(config.inverse.path_to_csv, R2, C, Z)
+            cow.set_ROM_mesurement()
+            # another loop of training with new "mesurements"
+
+            L2 = cow.solve_accumulate_2(
+                max_iters=config.inverse.max_iters,
+                eps=config.inverse.eps,
+                batch_size=config.inverse.batch_size,
+                lambda_reg=config.inverse.lambda_reg,
+                lambda_bif=config.inverse.lambda_bif,
+                lambda_sv=config.inverse.lambda_sv,
+                lambda_mes=config.inverse.lambda_mes,
+                log_every=config.inverse.log_every,
+            )
+
             arteries_log = cow.get_validation(arteries_log)
             arteries_log_save = cow.get_validation(arteries_log_save)
             L2s.append(L2)
@@ -276,6 +290,7 @@ def main(config: DictConfig) -> None:
 
             print(f"Validation data: {subfolder}")
             print(L2)
+            #sys.exit()
             i += 1
 
             # if i == 1:

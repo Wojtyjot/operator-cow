@@ -5,6 +5,7 @@ from typing import *
 import numpy as np
 import pandas as pd
 from ruamel.yaml.main import round_trip_dump as yaml_dump
+from pathlib import Path
 
 # Przydałoby sie zunifikowac joints w artery network i w openBF
 
@@ -88,6 +89,11 @@ def create_simulation_script(df: pd.DataFrame, project_name: str):
         },
         "network": network_elements,
     }
+    # create folder project_name_results
+    os.makedirs(f"{project_name}_results", exist_ok=True)
+    with open(f"{project_name}_results/{project_name}.yaml", "w") as yaml_file:
+        yaml_dump(data, yaml_file, default_flow_style=False)
+
     with open(f"{project_name}.yaml", "w") as yaml_file:
         yaml_dump(data, yaml_file, default_flow_style=False)
 
@@ -179,3 +185,16 @@ def compute_R_2(R_t: float, R_1: float):
     Func computes R2 for windkessel model
     """
     return R_t - R_1
+
+def create_results_folder(project_name: str):
+    """
+    Func creates results folder for given project name
+    in current working directory named project_name_results
+    first checking if folder exists
+    """
+    project_name = project_name + "_results"
+    path = Path(os.getcwd()).joinpath(project_name)
+    if not path.exists():
+        os.mkdir(path)
+    else:
+        print(f"Folder {project_name} already exists")

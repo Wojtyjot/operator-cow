@@ -12,9 +12,9 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import WeightedLpRelLoss
-from Find_RCR import find_windkessel
+from inverse.Find_RCR import find_windkessel
 from log_plots import plot_predictions
-from ROM.utils import create_Julia_file, create_simulation_script, run_simulation
+from inverse.ROM.utils import create_Julia_file, create_simulation_script, run_simulation, create_results_folder
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
 
@@ -85,6 +85,7 @@ class Artery(object):
                 self.mesurement_value = (
                     self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().to(self.device)
                 )
+                
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
                 self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
@@ -272,6 +273,16 @@ class Artery(object):
         # plt.show()
         plt.close()
 
+    def set_ROM_mesurement(self):
+        """
+        Function sets mesurement point for ROM model
+        """
+        path = Path(os.getcwd()).joinpath("Inverse_ROM_results").joinpath(f"{self.name}_u.last")
+        u = np.loadtxt(path)
+        u = u[:,1:] * 100  # transform to cm/s
+        self.mesurement_value = torch.from_numpy(u[:,25]).float().to(self.device)
+        self.mesurement = True
+
     def set_u_in(self, u_in: torch.Tensor):
         self.u_in = u_in
 
@@ -365,13 +376,17 @@ class Artery(object):
         return self.T
 
     def get_r0(self):
-        return torch.sqrt(self.a0[0] / torch.pi)
+        return torch.sqrt(self.a0[0] / torch.pi).detach().cpu().numpy()
 
     def get_t(self):
         return self.g.ndata["x"][:100, 1]
 
     def get_L(self):
-        return self.L
+        return self.L.detach().cpu().numpy()
+    
+    def is_outlet(self):
+        return self.name in ["L_PCA_P2", "R_PCA_P2", "L_ACA_A2", "R_ACA_A2", "L_MCA", "R_MCA"]
+    
 
 
 class COW(object):
@@ -1496,11 +1511,15 @@ class COW(object):
                 except:
                     pass
 
+
             self.propagate_RT()
             self.update_CT()
             self.propagate_CT()
+            if it == 999:
+                self.purge_ROM_mesurements()
+                self.optimizer_mes = None
 
-            # print(loss.item())
+            #print(loss.item())
 
             # if self.track and it % log_every == 0:
             #    wandb.log(
@@ -1528,6 +1547,7 @@ class COW(object):
             it += 1
 
         validation_loss = self.compute_validation_l2_loss(batch_size)
+        self.optimizer_mes = None
         # wandb.log({"Validation loss": validation_loss})
         # self.log_validation()
 
@@ -1834,17 +1854,19 @@ class COW(object):
                 out[idx] = (
                     artery.get_a_out().detach().cpu().numpy() * 1e-4,
                     artery.get_u_out().detach().cpu().numpy() * 1e-2,
-                    artery.get_p_out().detach().cpu().numpy() * 10,
+                    artery.get_p_out().detach().cpu().numpy() /10,
                     artery.get_t().detach().cpu().numpy(),
                 )
         return out
 
-    def create_inlet_file(self):
+    def create_inlet_file(self, project_name):
         """
         Function creates inlet dat file for openBF simulation
 
         needs flow in m^3/s andtimesteps in seconds
         """
+        #project_name = project_name + "_results"
+        path = Path(os.getcwd())#.joinpath(project_name)
         for artery in self.arteries:
             if artery.is_root():
                 u_in = artery.get_u_in().detach().cpu().numpy()
@@ -1853,9 +1875,10 @@ class COW(object):
                 flow = flow * 1e-6
                 T = artery.get_T()
                 t = np.linspace(0, T, len(flow))
-                save_folder_path = "/home/wojciech/Doppler/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/"
+                #save_folder_path = "/home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/"
+                
                 with open(
-                    os.path.join(save_folder_path, f"{artery.name}_inlet.dat"), "w"
+                    path.joinpath(f"{artery.name}_inlet.dat"), "w"
                 ) as f:
                     for i in range(len(flow)):
                         f.write(f"{t[i]} {flow[i]}\n")
@@ -1866,7 +1889,8 @@ class COW(object):
         performs rom simulation and creates fake "mesurements"
         for AcoA and pcoms
         """
-        self.create_inlet_file()
+        create_results_folder(project_name="Inverse_ROM")
+        self.create_inlet_file(project_name="Inverse_ROM")
         df = pd.read_csv(csv_path)
         #### need to create df that is base for creatig scripts etc
         r0s = self.get_r0s()
@@ -1882,8 +1906,25 @@ class COW(object):
         create_simulation_script(df, project_name="Inverse_ROM")
         print("Simulation script created")
         print("Creating Julia file")
-        create_Julia_file(project_name="Inverse_ROM", src="path_to_src")
+        create_Julia_file(project_name="Inverse_ROM", src="/home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/src")
         print("Julia file created")
         print("Running simulation")
         run_simulation(project_name="Inverse_ROM")
         print("Simulation finished")
+
+    def set_ROM_mesurement(self):
+        """
+        Function assigns fake mesurement to AcoA and pcoms
+        from ROM simulation
+        """
+        for artery in self.arteries:
+            if artery.name in ["AcoA", "L_PcoA", "R_PcoA"]:
+                artery.set_ROM_mesurement()
+
+    def purge_ROM_mesurements(self):
+        """
+        Function purges fake mesurements
+        """
+        for artery in self.arteries:
+            if artery.name in ["AcoA", "L_PcoA", "R_PcoA"]:
+                artery.mesurement = False # moze jakis setter zrobic
