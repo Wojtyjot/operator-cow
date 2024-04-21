@@ -9,8 +9,6 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
-from inverse.COW import COW
-from inverse.Find_RCR import find_windkessel
 from log_plots import plot_predictions
 from models.ae import MLAE
 from models.cgpt import CGPT
@@ -23,7 +21,10 @@ from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
 
-# from operatorcow.inverse.inverse import optimize_input_test
+from .COW import COW
+from .Find_RCR import find_windkessel
+
+# from operatorcow.inverse import optimize_input_test
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="inverse_full")
+@hydra.main(version_base=None, config_path="configs", config_name="sweep_config")
 def main(config: DictConfig) -> None:
 
     if config.log:
@@ -241,7 +242,7 @@ def main(config: DictConfig) -> None:
                 normalizer_theta=normalizer_theta,
                 device=device,
                 joints_path=config.data.joints_path,
-                lr=config.inverse.lr,
+                lr=config.lr,
                 track=config.log,
                 data_path=d_p,
                 normalizer_u_bc=normalizer_u_bc,
@@ -250,13 +251,13 @@ def main(config: DictConfig) -> None:
             )
 
             L2 = cow.solve_accumulate_2(
-                max_iters=config.inverse.max_iters,
-                eps=config.inverse.eps,
-                batch_size=config.inverse.batch_size,
-                lambda_mes=config.inverse.lambda_mes,
-                lambda_mass=config.inverse.lambda_mass,
-                lambda_pressure=config.inverse.lambda_pressure,
-                lambda_a0=config.inverse.lambda_a0,
+                max_iters=config.max_iters,
+                eps=config.eps,
+                batch_size=config.batch_size,
+                lambda_mes=config.lambda_mes,
+                lambda_mass=config.lambda_mass,
+                lambda_pressure=config.lambda_pressure,
+                lambda_a0=config.lambda_a0,
             )
             # estimate windkessel and perform simulation etc.
             # R2, C, Z = find_windkessel(
@@ -265,19 +266,19 @@ def main(config: DictConfig) -> None:
             # 5 in paper ML in cardiovascular flows
             # TODO zmodyfikować csv BY były dobre jointy
 
-            # cow.ROM_simulation(config.inverse.path_to_csv, 1,1, 1)
+            # cow.ROM_simulation(config.path_to_csv, 1,1, 1)
             # cow.set_ROM_mesurement()
             # another loop of training with new "mesurements"
 
             # L2 = cow.solve_accumulate_2(
-            #    max_iters=config.inverse.max_iters,
-            #    eps=config.inverse.eps,
-            #    batch_size=config.inverse.batch_size,
-            #    lambda_reg=config.inverse.lambda_reg,
-            #    lambda_bif=config.inverse.lambda_bif,
-            #    lambda_sv=config.inverse.lambda_sv,
-            #    lambda_mes=config.inverse.lambda_mes,
-            #    log_every=config.inverse.log_every,
+            #    max_iters=config.max_iters,
+            #    eps=config.eps,
+            #    batch_size=config.batch_size,
+            #    lambda_reg=config.lambda_reg,
+            #    lambda_bif=config.lambda_bif,
+            #    lambda_sv=config.lambda_sv,
+            #    lambda_mes=config.lambda_mes,
+            #    log_every=config.log_every,
             # )
 
             arteries_log = cow.get_validation(arteries_log)

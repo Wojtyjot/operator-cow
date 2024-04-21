@@ -1,40 +1,31 @@
 seed: ${generate_random_seed:}
-
 data_dir: ${hydra:runtime.cwd}/data
-
 outputs_dir: ${hydra:runtime.cwd}/outputs
-
 outputs_subdir: dev
-
 job_subdir: dev
-
-hydra:
-  run:
-    dir: outputs/${outputs_subdir}/${hydra.job.name}/${job_subdir}/${now:%Y-%m-%d_%H-%M-%S-%f}
-  job:
-    chdir: true
-  verbose: false
-
+program: Inverse_sweep.py
+method: random / todo
+metric:
+  goal: minimize
+  name: L2s
 wandb:
   project: operator-cow
   dir: ${hydra:runtime.cwd}/outputs
   mode: online
   anonymous: allow
   tags:
-    - development
-
+  - development
 data:
   data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/
   joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
   batch_size: 18
-
-
-log: False
-
+log: true
 model:
   name: GNOT
   trunk_size: 52
-  branch_sizes: [3,3]
+  branch_sizes:
+  - 3
+  - 3
   output_size: 3
   space_dim: 2
   n_layers: 3
@@ -52,21 +43,34 @@ model:
   surrogate_weights_path: /home/wssk-ptw/Operator/Model_archive/GNOT_FINAL.pt
   VANO_weights_path: /home/wssk-ptw/Operator/Model_archive/VANO_FINAL.pt
   ae:
-    layers: [100, 128, 256, 128, 32]
+    layers:
+    - 100
+    - 128
+    - 256
+    - 128
+    - 32
   VANO:
-    layers_encoder: [111, 256, 256, 256, 32]
-    layers_decoder: [27, 256, 256, 256, 100]
+    layers_encoder:
+    - 111
+    - 256
+    - 256
+    - 256
+    - 32
+    layers_decoder:
+    - 27
+    - 256
+    - 256
+    - 256
+    - 100
     latent_dim: 16
-
-inverse:
-  lambda_mass: 1000.0
-  lambda_pressure: 1e-6
-  lambda_mes: 10.0
-  max_iters: 3000
-  eps: 0.000006
-  batch_size: 18
-  lr: 0.01
-  log_every: 100
-  path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
-
-
+parameters:
+  inverse:
+    lambda_mass: 1000.0
+    lambda_pressure: 1.0e-06
+    lambda_mes: 10.0
+    max_iters: 3000
+    eps: 6.0e-06
+    batch_size: 18
+    lr: 0.01
+    log_every: 100
+    path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv

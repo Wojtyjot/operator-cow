@@ -8,6 +8,16 @@ outputs_subdir: dev
 
 job_subdir: dev
 
+program: Inverse_sweep.py
+
+method: grid
+
+metric:
+  goal: minimize
+  name: L2s
+
+
+
 hydra:
   run:
     dir: outputs/${outputs_subdir}/${hydra.job.name}/${job_subdir}/${now:%Y-%m-%d_%H-%M-%S-%f}
@@ -29,7 +39,7 @@ data:
   batch_size: 18
 
 
-log: False
+log: True
 
 model:
   name: GNOT
@@ -58,14 +68,18 @@ model:
     layers_decoder: [27, 256, 256, 256, 100]
     latent_dim: 16
 
-inverse:
-  lambda_mass: 1000.0
-  lambda_pressure: 1e-6
-  lambda_mes: 10.0
+parameters:
+  lambda_mass:
+   values: [100, 1000, 10000]
+  lambda_pressure:
+    values: [0.00001, 0.0000001, 0.00000001]
+  lambda_mes:
+    values: [100, 10, 1]
   max_iters: 3000
   eps: 0.000006
   batch_size: 18
-  lr: 0.01
+  lr:
+    values: [0.1, 0.01, 0.001]
   log_every: 100
   path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
 

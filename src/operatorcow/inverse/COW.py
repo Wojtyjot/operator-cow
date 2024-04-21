@@ -13,11 +13,16 @@ import torch.nn as nn
 import wandb
 from data_utils import WeightedLpRelLoss
 from inverse.Find_RCR import find_windkessel
+from inverse.ROM.Simulation import estimate_windkessel_func
+from inverse.ROM.utils import (
+    create_Julia_file,
+    create_results_folder,
+    create_simulation_script,
+    run_simulation,
+)
 from log_plots import plot_predictions
-from inverse.ROM.utils import create_Julia_file, create_simulation_script, run_simulation, create_results_folder
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
-from inverse.ROM.Simulation import estimate_windkessel_func
 
 ## Wszystko musi byc na same device
 # artery musi zwracać wszystkie dane potrzebne do obliczen
@@ -86,7 +91,7 @@ class Artery(object):
                 self.mesurement_value = (
                     self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().to(self.device)
                 )
-                
+
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
                 self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
@@ -278,32 +283,44 @@ class Artery(object):
         """
         Function sets mesurement point for ROM model
         """
-        path = Path(os.getcwd()).joinpath("Inverse_ROM_results").joinpath(f"{self.name}_u.last")
+        path = (
+            Path(os.getcwd())
+            .joinpath("Inverse_ROM_results")
+            .joinpath(f"{self.name}_u.last")
+        )
         u = np.loadtxt(path)
-        u = u[:,1:] * 100  # transform to cm/s
-        self.mesurement_value = torch.from_numpy(u[:,25]).float().to(self.device)
+        u = u[:, 1:] * 100  # transform to cm/s
+        self.mesurement_value = torch.from_numpy(u[:, 25]).float().to(self.device)
         self.mesurement = True
 
     def get_u_in_rom(self):
         """
         Function returns u_in for ROM model
         """
-        path = Path(os.getcwd()).joinpath("Inverse_ROM_results").joinpath(f"{self.name}_u.last")
+        path = (
+            Path(os.getcwd())
+            .joinpath("Inverse_ROM_results")
+            .joinpath(f"{self.name}_u.last")
+        )
         u = np.loadtxt(path)
-        u = u[:,1:] * 100
-        u = u[:,0]
+        u = u[:, 1:] * 100
+        u = u[:, 0]
         return torch.from_numpy(u).float().to(self.device)
 
     def get_a_in_rom(self):
         """
         Function returns a_in for ROM model
         """
-        path = Path(os.getcwd()).joinpath("Inverse_ROM_results").joinpath(f"{self.name}_A.last")
+        path = (
+            Path(os.getcwd())
+            .joinpath("Inverse_ROM_results")
+            .joinpath(f"{self.name}_A.last")
+        )
         a = np.loadtxt(path)
-        a = a[:,1:]
-        a = a[:,0] * 1e4
+        a = a[:, 1:]
+        a = a[:, 0] * 1e4
         return torch.from_numpy(a).float().to(self.device)
-     
+
     def set_u_in(self, u_in: torch.Tensor):
         self.u_in = u_in
 
@@ -404,10 +421,16 @@ class Artery(object):
 
     def get_L(self):
         return self.L.detach().cpu().numpy()
-    
+
     def is_outlet(self):
-        return self.name in ["L_PCA_P2", "R_PCA_P2", "L_ACA_A2", "R_ACA_A2", "L_MCA", "R_MCA"]
-    
+        return self.name in [
+            "L_PCA_P2",
+            "R_PCA_P2",
+            "L_ACA_A2",
+            "R_ACA_A2",
+            "L_MCA",
+            "R_MCA",
+        ]
 
 
 class COW(object):
@@ -1457,11 +1480,10 @@ class COW(object):
         max_iters: int,
         eps: float,
         batch_size: int,
-        lambda_reg: float,
         lambda_mes: float,
-        lambda_sv: float,
-        lambda_bif: float,
-        log_every: int,
+        lambda_mass: float,
+        lambda_pressure: float,
+        lambda_a0: float,
     ):
         """
         Solving inverse proble one joint at a time and accumulating
@@ -1485,7 +1507,7 @@ class COW(object):
             if it < 2:
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
-                loss += lambda_bif * (loss_mass + loss_pressure)
+                loss += loss_mass + loss_pressure
                 loss_a0 = self.compute_a0_loss()
                 loss += loss_a0
                 loss.backward()
@@ -1495,13 +1517,13 @@ class COW(object):
 
             elif it < 1000 and it >= 2:
                 if self.optimizer_mes is None:
-                    self.create_optimizer(0.1, "MES")
+                    self.create_optimizer(self.lr, "MES")
 
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
-                loss += 1e-20 * lambda_bif * (loss_mass + loss_pressure)
+                loss += 1e-20 * (loss_mass + loss_pressure)
                 loss_a0 = self.compute_a0_loss()
-                loss += 10000 * loss_a0
+                loss += lambda_a0 * loss_a0
                 loss.backward()
                 self.optimizer_mes.step()
 
@@ -1510,9 +1532,11 @@ class COW(object):
                     self.create_optimizer(self.lr, "NON_MES")
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += lambda_bif * (1000 * loss_mass + loss_pressure / 1e5)
+                # loss += lambda_bif * (1000 * loss_mass + loss_pressure / 1e5)
+                loss += lambda_mass * loss_mass
+                loss += lambda_pressure * loss_pressure
                 loss_a0 = self.compute_a0_loss()
-                loss += 10000 * loss_a0
+                loss += lambda_a0 * loss_a0
                 loss.backward()
                 self.optimizer_non_mes.step()
 
@@ -1522,9 +1546,11 @@ class COW(object):
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += lambda_bif * (1000 * loss_mass +   loss_pressure / 1e5)
+                # loss += lambda_bif * (1000 * loss_mass +   loss_pressure / 1e5)
+                loss += lambda_mass * loss_mass
+                loss += lambda_pressure * loss_pressure
                 loss_a0 = self.compute_a0_loss()
-                loss += 10000 * loss_a0
+                loss += lambda_a0 * loss_a0
 
                 try:
                     loss.backward()
@@ -1532,15 +1558,14 @@ class COW(object):
                 except:
                     pass
 
-
             self.propagate_RT()
             self.update_CT()
             self.propagate_CT()
-            if it == 1999:
-                self.purge_ROM_mesurements()
-                self.optimizer_mes = None
+            # if it == 1999:
+            #    self.purge_ROM_mesurements()
+            #    self.optimizer_mes = None
 
-            print(loss.item())
+            # print(loss.item())
 
             # if self.track and it % log_every == 0:
             #    wandb.log(
@@ -1568,8 +1593,8 @@ class COW(object):
             it += 1
 
         validation_loss = self.compute_validation_l2_loss(batch_size)
-        self.optimizer_mes = None
-        # wandb.log({"Validation loss": validation_loss})
+        # self.optimizer_mes = None
+        wandb.log({"Validation loss": validation_loss})
         # self.log_validation()
 
         # iter += 1
@@ -1726,18 +1751,18 @@ class COW(object):
     def dump_ROM_plots(self, path: str):
         """
         Funtion plots comparison etween estimated ROM simulations and true values
-        for velocity area and flow 
+        for velocity area and flow
         """
         for artery in self.arteries:
             u_in = artery.get_u_in().detach().cpu().numpy()
             a_in = artery.get_a_in().detach().cpu().numpy()
-            #p_in = artery.get_p_in().detach().cpu().numpy()
+            # p_in = artery.get_p_in().detach().cpu().numpy()
             u_in_true = artery.get_true_u_in().detach().cpu().numpy()
             a_in_true = artery.get_true_a_in().detach().cpu().numpy()
-            #p_in_true = artery.get_true_p_in().detach().cpu().numpy()
+            # p_in_true = artery.get_true_p_in().detach().cpu().numpy()
             u_in_rom = artery.get_u_in_rom().detach().cpu().numpy()
             a_in_rom = artery.get_a_in_rom().detach().cpu().numpy()
-            #p_in_rom = artery.get_p_in_rom().detach().cpu().numpy()
+            # p_in_rom = artery.get_p_in_rom().detach().cpu().numpy()
 
             fig, axs = plt.subplots(2, 2, figsize=(10, 10))
             axs[0, 0].plot(u_in, label="Predicted")
@@ -1754,12 +1779,12 @@ class COW(object):
             axs[0, 1].set_ylabel("cm^2")
             axs[0, 1].set_xlabel("time_step")
             axs[0, 1].legend()
-           #axs[1, 0].plot(p_in, label="Predicted")
-           # axs[1, 0].plot(p_in_true, label="True")
-           # axs[1, 0].plot(p_in_rom, label="ROM")
-           # axs[1, 0].set_title("Pressure")
-           # axs[1, 0].set_ylabel("Baye")
-           # axs[1, 0].set_xlabel("time_step")
+            # axs[1, 0].plot(p_in, label="Predicted")
+            # axs[1, 0].plot(p_in_true, label="True")
+            # axs[1, 0].plot(p_in_rom, label="ROM")
+            # axs[1, 0].set_title("Pressure")
+            # axs[1, 0].set_ylabel("Baye")
+            # axs[1, 0].set_xlabel("time_step")
             axs[1, 0].legend()
             axs[1, 1].plot(a_in * u_in, label="Predicted")
             axs[1, 1].plot(a_in_true * u_in_true, label="True")
@@ -1771,8 +1796,6 @@ class COW(object):
             fig.suptitle(artery.name)
             plt.savefig(os.path.join(path, f"{artery.name}_ROM.png"))
             plt.close()
-
-        
 
     def dump_params(self, path: str):
         """
@@ -1929,15 +1952,14 @@ class COW(object):
                         artery.get_true_a_in().detach().cpu().numpy() * 1e-2,
                         artery.get_true_p_in().detach().cpu().numpy() / 10,
                         artery.get_t().detach().cpu().numpy(),
-                       
                     )
-                    
+
                 else:
-                
+
                     out[idx] = (
                         artery.get_a_out().detach().cpu().numpy() * 1e-4,
                         artery.get_u_out().detach().cpu().numpy() * 1e-2,
-                        artery.get_p_out().detach().cpu().numpy() /10,
+                        artery.get_p_out().detach().cpu().numpy() / 10,
                         artery.get_t().detach().cpu().numpy(),
                     )
         return out
@@ -1948,8 +1970,8 @@ class COW(object):
 
         needs flow in m^3/s andtimesteps in seconds
         """
-        #project_name = project_name + "_results"
-        path = Path(os.getcwd())#.joinpath(project_name)
+        # project_name = project_name + "_results"
+        path = Path(os.getcwd())  # .joinpath(project_name)
         for artery in self.arteries:
             if artery.is_root():
                 u_in = artery.get_u_in().detach().cpu().numpy()
@@ -1958,11 +1980,9 @@ class COW(object):
                 flow = flow * 1e-6
                 T = artery.get_T()
                 t = np.linspace(0, T, len(flow))
-                #save_folder_path = "/home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/"
-                
-                with open(
-                    path.joinpath(f"{artery.name}_inlet.dat"), "w"
-                ) as f:
+                # save_folder_path = "/home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/"
+
+                with open(path.joinpath(f"{artery.name}_inlet.dat"), "w") as f:
                     for i in range(len(flow)):
                         f.write(f"{t[i]} {flow[i]}\n")
 
@@ -1980,9 +2000,9 @@ class COW(object):
         Ls = self.get_Ls()
         df["Rp"] = r0s
         df["Rd"] = r0s
-        #df["R1"] = Z
-        #df["R2"] = R2
-        #df["C"] = C
+        # df["R1"] = Z
+        # df["R2"] = R2
+        # df["C"] = C
         df["L"] = Ls
         df = estimate_windkessel_func(df, self.RT.detach().cpu().numpy(), 1050)
 
@@ -1990,7 +2010,10 @@ class COW(object):
         create_simulation_script(df, project_name="Inverse_ROM")
         print("Simulation script created")
         print("Creating Julia file")
-        create_Julia_file(project_name="Inverse_ROM", src="/home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/src")
+        create_Julia_file(
+            project_name="Inverse_ROM",
+            src="/home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/src",
+        )
         print("Julia file created")
         print("Running simulation")
         run_simulation(project_name="Inverse_ROM")
@@ -2002,7 +2025,15 @@ class COW(object):
         from ROM simulation
         """
         for artery in self.arteries:
-            if artery.name in ["AcoA", "L_PcoA", "R_PcoA", "L_ACA_A2", "R_ACA_A2", "L_PCA_P2", "R_PCA_P2"]:
+            if artery.name in [
+                "AcoA",
+                "L_PcoA",
+                "R_PcoA",
+                "L_ACA_A2",
+                "R_ACA_A2",
+                "L_PCA_P2",
+                "R_PCA_P2",
+            ]:
                 artery.set_ROM_mesurement()
 
     def purge_ROM_mesurements(self):
@@ -2010,7 +2041,13 @@ class COW(object):
         Function purges fake mesurements
         """
         for artery in self.arteries:
-            if artery.name in ["AcoA", "L_PcoA", "R_PcoA", "L_ACA_A2", "R_ACA_A2", "L_PCA_P2", "R_PCA_P2"]:
-                artery.mesurement = False # moze jakis setter zrobic
-
-    
+            if artery.name in [
+                "AcoA",
+                "L_PcoA",
+                "R_PcoA",
+                "L_ACA_A2",
+                "R_ACA_A2",
+                "L_PCA_P2",
+                "R_PCA_P2",
+            ]:
+                artery.mesurement = False  # moze jakis setter zrobic
