@@ -3,6 +3,7 @@ import multiprocessing
 import numpy as np
 import scipy.integrate
 #from inverse.COW import COW
+import sys
 
 # implementation based on https://github.com/PredictiveIntelligenceLab/1DBloodFlowPINNs
 
@@ -54,6 +55,8 @@ def dydt(p, t, theta, aa, bb, T):
     """
 
     Q, dQ_dt = compute_Q_dQ_dt(t, aa, bb, 50, T)
+    
+   
 
     R1, R2, C, Pinf = theta
     dp_dt = -p / R2 / C + (R1 + R2) / R2 / C * Q + Pinf / R2 / C + R1 * dQ_dt
@@ -129,7 +132,7 @@ def parallel_search_params(args):
 
 def search_params_parallel(R, C, t, p_exact, p, nn, R1, p_inf, T, aa, bb):
     pool = multiprocessing.Pool(
-        processes=multiprocessing.cpu_count()
+        processes= multiprocessing.cpu_count()
     )  # Number of CPU cores
     args_list = [
         (i, j, R1, t, p_exact, p, T, aa, bb, R, C, p_inf)
@@ -172,7 +175,7 @@ def find_windkessel(cow, num_iters: int):
     )
     p_inf = 666.5
     rho = 1050.0
-    out_pred_dict = cow.get_outlet_predictions()
+    out_pred_dict = cow.get_outlet_predictions(True)
 
     for key, value in out_pred_dict.items():
         A, u, p, t = value
@@ -188,8 +191,10 @@ def find_windkessel(cow, num_iters: int):
         T = np.max(t)
         p_exact = p
         p = p_exact[:]
+        #print(Q.shape)
         NN = Q.shape[0]
         z = compute_characteristic_impedance(cow.get_artery(int(key)), rho)
+        #print(z)
         
 
         # compute fft
@@ -204,7 +209,7 @@ def find_windkessel(cow, num_iters: int):
         import time
         nn = 10
         lb = np.array([14.0, -29.0])
-        ub = np.array([29.0/2, -14.0/2])
+        ub = np.array([29.0, -14.0])
         R_prop = np.exp(np.linspace(lb[0], ub[0], nn))
         C_prop = np.exp(np.linspace(lb[1], ub[1], nn))
         R_temp, C_temp = np.meshgrid(R_prop, C_prop)
@@ -261,8 +266,8 @@ def compute_characteristic_impedance(Artery, rho: float):
     """
     Function computes characteristic impedance for artery
     """
-    beta = compute_beta(Artery.get_r0() * 1e-2)
-    c0 = compute_c0(Artery.get_r0() * 1e-2, beta, rho)
+    beta = compute_beta((Artery.get_r0() * 1e-2))
+    c0 = compute_c0((Artery.get_r0() * 1e-2), beta, rho)
     return rho * c0 / (np.pi * (Artery.get_r0() * 1e-2) ** 2)
 
 

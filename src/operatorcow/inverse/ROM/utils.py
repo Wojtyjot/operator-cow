@@ -18,13 +18,14 @@ def create_simulation_script(df: pd.DataFrame, project_name: str):
     # te parametry trzeba dac do jakiegos pliku i czytac
     # chyba ze zostawimy hardcoded i wyjebane
     # dodac p_ext do pliku
-    P_ext = None
+    P_ext =9999.179
+
 
     # hardcoded solver params
     rho = 1050.0
     mu = 4.5e-3
     Ccfl = 0.9  # Courant number
-    cycles = 100  # number of cycles
+    cycles = 15  # number of cycles
     jump = 100  # number of timesteps per cycle to be saved
     convergence_tolerance = 1.0  # percentage value
     network_elements = list()
@@ -40,6 +41,7 @@ def create_simulation_script(df: pd.DataFrame, project_name: str):
                     "Rp": float(df[df.id == i].Rp.iloc[0]),
                     "Rd": float(df[df.id == i].Rd.iloc[0]),
                     "M": int(df[df.id == i].M.iloc[0]),
+                    "Pext": P_ext,
                     "inlet": "Q",
                     "inlet number": int(df[df.id == i].inlet.iloc[0]),
                     "inlet file": df[df.id == i].inlet_file.iloc[0],
@@ -56,6 +58,7 @@ def create_simulation_script(df: pd.DataFrame, project_name: str):
                     "Rp": float(df[df.id == i].Rp.iloc[0]),
                     "Rd": float(df[df.id == i].Rd.iloc[0]),
                     "M": int(df[df.id == i].M.iloc[0]),
+                    "Pext": P_ext,
                     "outlet": "wk3",
                     "R1": float(df[df.id == i].R1.iloc[0]),
                     "R2": float(df[df.id == i].R2.iloc[0]),
@@ -73,6 +76,7 @@ def create_simulation_script(df: pd.DataFrame, project_name: str):
                     "Rp": float(df[df.id == i].Rp.iloc[0]),
                     "Rd": float(df[df.id == i].Rd.iloc[0]),
                     "M": int(df[df.id == i].M.iloc[0]),
+                    "Pext": P_ext,
                 }
             )
     data = {

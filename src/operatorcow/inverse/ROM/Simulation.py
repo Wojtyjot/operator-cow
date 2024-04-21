@@ -2,7 +2,7 @@ from typing import *
 
 import numpy as np
 import pandas as pd
-from ROM.utils import (
+from inverse.ROM.utils import (
     compute_beta,
     compute_c0,
     compute_C_t,
@@ -18,11 +18,12 @@ from ROM.utils import (
 
 
 def estimate_windkessel_func(
-    arteries_csv: str,
-    P_sys: float,
-    P_dia: float,
-    SV: float,
-    HR: float,
+    arteries_df: pd.DataFrame,
+    RT: float,
+    #P_sys: float,
+    #P_dia: float,
+    #SV: float,
+    #HR: float,
     rho: float,
     tau: Optional[float] = 1.34,
     COf: Optional[float] = 0.12,
@@ -38,11 +39,13 @@ def estimate_windkessel_func(
     ### w tej formie nadaje sie tylko do estymacji COW
     ### aby estymowaac w t ramiennych i aorcie trzeba zmienic
     ### plik csv moze miec tylko outlety w glowie
-    df = pd.read_csv(arteries_csv)
+    df = arteries_df
     R1, R2, C = list(), list(), list()
     r0 = list()
-    R_tot = compute_R_tot(P_sys, P_dia, SV, HR)
-    C_tot = compute_C_tot(R_tot, tau)
+    #R_tot = compute_R_tot(P_sys, P_dia, SV, HR)
+    #C_tot = compute_C_tot(R_tot, tau)
+    R_tot = RT
+    C_tot = 1.34 / R_tot
 
     for id in df.id:
         if (df[df.id == id].outlet == 1).bool():

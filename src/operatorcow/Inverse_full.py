@@ -47,7 +47,7 @@ def main(config: DictConfig) -> None:
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    torch.manual_seed(config.seed)
+    torch.manual_seed(2137)
 
     # create normalizers from data not dataset.
     normalizer_x = UnitTransformer_2(
@@ -260,25 +260,26 @@ def main(config: DictConfig) -> None:
                 log_every=config.inverse.log_every,
             )
             # estimate windkessel and perform simulation etc.
-            R2, C, Z = find_windkessel(
-                cow, 10
-            )  # need to check for opimal num_simulations
+            #R2, C, Z = find_windkessel(
+            #    cow, 5
+            #)  # need to check for opimal num_simulations
             # 5 in paper ML in cardiovascular flows
             # TODO zmodyfikować csv BY były dobre jointy
-            cow.ROM_simulation(config.inverse.path_to_csv, R2, C, Z)
-            cow.set_ROM_mesurement()
+            
+            #cow.ROM_simulation(config.inverse.path_to_csv, 1,1, 1)
+            #cow.set_ROM_mesurement()
             # another loop of training with new "mesurements"
 
-            L2 = cow.solve_accumulate_2(
-                max_iters=config.inverse.max_iters,
-                eps=config.inverse.eps,
-                batch_size=config.inverse.batch_size,
-                lambda_reg=config.inverse.lambda_reg,
-                lambda_bif=config.inverse.lambda_bif,
-                lambda_sv=config.inverse.lambda_sv,
-                lambda_mes=config.inverse.lambda_mes,
-                log_every=config.inverse.log_every,
-            )
+            #L2 = cow.solve_accumulate_2(
+            #    max_iters=config.inverse.max_iters,
+            #    eps=config.inverse.eps,
+            #    batch_size=config.inverse.batch_size,
+            #    lambda_reg=config.inverse.lambda_reg,
+            #    lambda_bif=config.inverse.lambda_bif,
+            #    lambda_sv=config.inverse.lambda_sv,
+            #    lambda_mes=config.inverse.lambda_mes,
+            #    log_every=config.inverse.log_every,
+            #)
 
             arteries_log = cow.get_validation(arteries_log)
             arteries_log_save = cow.get_validation(arteries_log_save)
@@ -287,14 +288,15 @@ def main(config: DictConfig) -> None:
             cow.dump_params(fig_path)
             cow.dump_statistics(fig_path)
             cow.dump_validation(fig_path, arteries_log_save)
+            #cow.dump_ROM_plots(fig_path)
 
             print(f"Validation data: {subfolder}")
             print(L2)
             #sys.exit()
             i += 1
 
-            # if i == 1:
-            #    break
+            if i == 40:
+                break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
     L2s = np.array(L2s)

@@ -17,6 +17,7 @@ from log_plots import plot_predictions
 from inverse.ROM.utils import create_Julia_file, create_simulation_script, run_simulation, create_results_folder
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
+from inverse.ROM.Simulation import estimate_windkessel_func
 
 ## Wszystko musi byc na same device
 # artery musi zwracać wszystkie dane potrzebne do obliczen
@@ -283,6 +284,26 @@ class Artery(object):
         self.mesurement_value = torch.from_numpy(u[:,25]).float().to(self.device)
         self.mesurement = True
 
+    def get_u_in_rom(self):
+        """
+        Function returns u_in for ROM model
+        """
+        path = Path(os.getcwd()).joinpath("Inverse_ROM_results").joinpath(f"{self.name}_u.last")
+        u = np.loadtxt(path)
+        u = u[:,1:] * 100
+        u = u[:,0]
+        return torch.from_numpy(u).float().to(self.device)
+
+    def get_a_in_rom(self):
+        """
+        Function returns a_in for ROM model
+        """
+        path = Path(os.getcwd()).joinpath("Inverse_ROM_results").joinpath(f"{self.name}_A.last")
+        a = np.loadtxt(path)
+        a = a[:,1:]
+        a = a[:,0] * 1e4
+        return torch.from_numpy(a).float().to(self.device)
+     
     def set_u_in(self, u_in: torch.Tensor):
         self.u_in = u_in
 
@@ -1489,7 +1510,7 @@ class COW(object):
                     self.create_optimizer(self.lr, "NON_MES")
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += lambda_bif * (5000 * loss_mass + 0.01 * loss_pressure / 1e5)
+                loss += lambda_bif * (1000 * loss_mass + loss_pressure / 1e5)
                 loss_a0 = self.compute_a0_loss()
                 loss += 10000 * loss_a0
                 loss.backward()
@@ -1501,7 +1522,7 @@ class COW(object):
                 loss += lambda_mes * self.compute_mesurement_loss()
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
 
-                loss += lambda_bif * (5000 * loss_mass + 0.01 * loss_pressure / 1e5)
+                loss += lambda_bif * (1000 * loss_mass +   loss_pressure / 1e5)
                 loss_a0 = self.compute_a0_loss()
                 loss += 10000 * loss_a0
 
@@ -1515,11 +1536,11 @@ class COW(object):
             self.propagate_RT()
             self.update_CT()
             self.propagate_CT()
-            if it == 999:
+            if it == 1999:
                 self.purge_ROM_mesurements()
                 self.optimizer_mes = None
 
-            #print(loss.item())
+            print(loss.item())
 
             # if self.track and it % log_every == 0:
             #    wandb.log(
@@ -1702,6 +1723,57 @@ class COW(object):
             plt.savefig(os.path.join(path, f"{artery.name}.png"))
             plt.close()
 
+    def dump_ROM_plots(self, path: str):
+        """
+        Funtion plots comparison etween estimated ROM simulations and true values
+        for velocity area and flow 
+        """
+        for artery in self.arteries:
+            u_in = artery.get_u_in().detach().cpu().numpy()
+            a_in = artery.get_a_in().detach().cpu().numpy()
+            #p_in = artery.get_p_in().detach().cpu().numpy()
+            u_in_true = artery.get_true_u_in().detach().cpu().numpy()
+            a_in_true = artery.get_true_a_in().detach().cpu().numpy()
+            #p_in_true = artery.get_true_p_in().detach().cpu().numpy()
+            u_in_rom = artery.get_u_in_rom().detach().cpu().numpy()
+            a_in_rom = artery.get_a_in_rom().detach().cpu().numpy()
+            #p_in_rom = artery.get_p_in_rom().detach().cpu().numpy()
+
+            fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+            axs[0, 0].plot(u_in, label="Predicted")
+            axs[0, 0].plot(u_in_true, label="True")
+            axs[0, 0].plot(u_in_rom, label="ROM")
+            axs[0, 0].set_title("Velocity")
+            axs[0, 0].set_ylabel("cm/s")
+            axs[0, 0].set_xlabel("time_step")
+            axs[0, 0].legend()
+            axs[0, 1].plot(a_in, label="Predicted")
+            axs[0, 1].plot(a_in_true, label="True")
+            axs[0, 1].plot(a_in_rom, label="ROM")
+            axs[0, 1].set_title("Area")
+            axs[0, 1].set_ylabel("cm^2")
+            axs[0, 1].set_xlabel("time_step")
+            axs[0, 1].legend()
+           #axs[1, 0].plot(p_in, label="Predicted")
+           # axs[1, 0].plot(p_in_true, label="True")
+           # axs[1, 0].plot(p_in_rom, label="ROM")
+           # axs[1, 0].set_title("Pressure")
+           # axs[1, 0].set_ylabel("Baye")
+           # axs[1, 0].set_xlabel("time_step")
+            axs[1, 0].legend()
+            axs[1, 1].plot(a_in * u_in, label="Predicted")
+            axs[1, 1].plot(a_in_true * u_in_true, label="True")
+            axs[1, 1].plot(a_in_rom * u_in_rom, label="ROM")
+            axs[1, 1].set_title("Flow")
+            axs[1, 1].set_ylabel("cm^3/s")
+            axs[1, 1].set_xlabel("time_step")
+            axs[1, 1].legend()
+            fig.suptitle(artery.name)
+            plt.savefig(os.path.join(path, f"{artery.name}_ROM.png"))
+            plt.close()
+
+        
+
     def dump_params(self, path: str):
         """
         Function dumps parameters of simulation HR, RT_true, CT_true, RT rec, CT rec
@@ -1843,7 +1915,7 @@ class COW(object):
 
     ### need some function for outlet predictions
 
-    def get_outlet_predictions(self):
+    def get_outlet_predictions(self, true: bool = False):
         """
         Function returns dict with outlet predictions
         """
@@ -1851,12 +1923,23 @@ class COW(object):
         for idx, artery in enumerate(self.arteries):
             if artery.is_outlet():
                 # need to transfrom to si units
-                out[idx] = (
-                    artery.get_a_out().detach().cpu().numpy() * 1e-4,
-                    artery.get_u_out().detach().cpu().numpy() * 1e-2,
-                    artery.get_p_out().detach().cpu().numpy() /10,
-                    artery.get_t().detach().cpu().numpy(),
-                )
+                if true:
+                    out[idx] = (
+                        artery.get_true_u_in().detach().cpu().numpy() * 1e-4,
+                        artery.get_true_a_in().detach().cpu().numpy() * 1e-2,
+                        artery.get_true_p_in().detach().cpu().numpy() / 10,
+                        artery.get_t().detach().cpu().numpy(),
+                       
+                    )
+                    
+                else:
+                
+                    out[idx] = (
+                        artery.get_a_out().detach().cpu().numpy() * 1e-4,
+                        artery.get_u_out().detach().cpu().numpy() * 1e-2,
+                        artery.get_p_out().detach().cpu().numpy() /10,
+                        artery.get_t().detach().cpu().numpy(),
+                    )
         return out
 
     def create_inlet_file(self, project_name):
@@ -1897,10 +1980,11 @@ class COW(object):
         Ls = self.get_Ls()
         df["Rp"] = r0s
         df["Rd"] = r0s
-        df["R1"] = Z
-        df["R2"] = R2
-        df["C"] = C
+        #df["R1"] = Z
+        #df["R2"] = R2
+        #df["C"] = C
         df["L"] = Ls
+        df = estimate_windkessel_func(df, self.RT.detach().cpu().numpy(), 1050)
 
         print("Creating simulation script...")
         create_simulation_script(df, project_name="Inverse_ROM")
@@ -1918,7 +2002,7 @@ class COW(object):
         from ROM simulation
         """
         for artery in self.arteries:
-            if artery.name in ["AcoA", "L_PcoA", "R_PcoA"]:
+            if artery.name in ["AcoA", "L_PcoA", "R_PcoA", "L_ACA_A2", "R_ACA_A2", "L_PCA_P2", "R_PCA_P2"]:
                 artery.set_ROM_mesurement()
 
     def purge_ROM_mesurements(self):
@@ -1926,5 +2010,7 @@ class COW(object):
         Function purges fake mesurements
         """
         for artery in self.arteries:
-            if artery.name in ["AcoA", "L_PcoA", "R_PcoA"]:
+            if artery.name in ["AcoA", "L_PcoA", "R_PcoA", "L_ACA_A2", "R_ACA_A2", "L_PCA_P2", "R_PCA_P2"]:
                 artery.mesurement = False # moze jakis setter zrobic
+
+    
