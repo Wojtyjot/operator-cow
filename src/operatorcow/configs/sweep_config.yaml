@@ -1,12 +1,3 @@
-seed: ${generate_random_seed:}
-
-data_dir: ${hydra:runtime.cwd}/data
-
-outputs_dir: ${hydra:runtime.cwd}/outputs
-
-outputs_subdir: dev
-
-job_subdir: dev
 
 program: Inverse_sweep.py
 
@@ -16,58 +7,6 @@ metric:
   goal: minimize
   name: L2s
 
-
-
-hydra:
-  run:
-    dir: outputs/${outputs_subdir}/${hydra.job.name}/${job_subdir}/${now:%Y-%m-%d_%H-%M-%S-%f}
-  job:
-    chdir: true
-  verbose: false
-
-wandb:
-  project: operator-cow
-  dir: ${hydra:runtime.cwd}/outputs
-  mode: online
-  anonymous: allow
-  tags:
-    - development
-
-data:
-  data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/
-  joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
-  batch_size: 18
-
-
-log: True
-
-model:
-  name: GNOT
-  trunk_size: 52
-  branch_sizes: [3,3]
-  output_size: 3
-  space_dim: 2
-  n_layers: 3
-  n_hidden: 96
-  n_head: 8
-  n_experts: 4
-  n_inner: 4
-  mlp_layers: 4
-  attn_type: linear
-  act: gelu
-  ffn_dropout: 0.0
-  attn_dropout: 0.0
-  horiz_fourier_dim: 0
-  AE_weights_path: /data/path/placeholder
-  surrogate_weights_path: /home/wssk-ptw/Operator/Model_archive/GNOT_FINAL.pt
-  VANO_weights_path: /home/wssk-ptw/Operator/Model_archive/VANO_FINAL.pt
-  ae:
-    layers: [100, 128, 256, 128, 32]
-  VANO:
-    layers_encoder: [111, 256, 256, 256, 32]
-    layers_decoder: [27, 256, 256, 256, 100]
-    latent_dim: 16
-
 parameters:
   lambda_mass:
    values: [100, 1000, 10000]
@@ -75,12 +14,69 @@ parameters:
     values: [0.00001, 0.0000001, 0.00000001]
   lambda_mes:
     values: [100, 10, 1]
-  max_iters: 3000
-  eps: 0.000006
-  batch_size: 18
+  lambda_a0:
+    values: [1000]
+  max_iters:
+    values: [3000]
+  eps:
+    values: [0.000006]
+  batch_size:
+    values: [18]
   lr:
     values: [0.1, 0.01, 0.001]
-  log_every: 100
-  path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
+  log_every: 
+    values: [100]
+  path_to_csv:
+    values: [/home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv]
+  name:
+    values: [GNOT]
+  trunk_size:
+    values: [52]
+  branch_sizes:
+    values: [[3,3]]
+  output_size:
+    values: [3]
+  space_dim:
+    values: [2]
+  n_layers:
+    values: [3]
+  n_hidden:
+    values: [96]
+  n_head:
+    values: [8]
+  n_experts:
+    values: [4]
+  n_inner:
+    values: [4]
+  mlp_layers:
+    values: [4]
+  attn_type:
+    values: [linear]
+  act:
+    values: [gelu]
+  ffn_dropout:
+    values: [0.0]
+  attn_dropout:
+    values: [0.0]
+  horiz_fourier_dim:
+    values: [0]
+  AE_weights_path:
+    values: [/data/path/placeholder]
+  surrogate_weights_path:
+    values: [/home/wssk-ptw/Operator/Model_archive/GNOT_FINAL.pt]
+  VANO_weights_path:
+    values: [/home/wssk-ptw/Operator/Model_archive/VANO_FINAL.pt]
+  layers_encoder:
+    values: [[111, 256, 256, 256, 32]]
+  layers_decoder:
+    values: [[27, 256, 256, 256, 100]]
+  latent_dim:
+    values: [16]
+  data_path:
+    values: [/home/wssk-ptw/Operator/COW_DATASET/VALIDATION/]
+  joints_path:
+    values: [/home/wssk-ptw/Operator/operator-cow/data/joints.csv]
 
+
+  
 

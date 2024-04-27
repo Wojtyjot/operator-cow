@@ -9,6 +9,8 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
+from inverse.COW import COW
+from inverse.Find_RCR import find_windkessel
 from log_plots import plot_predictions
 from models.ae import MLAE
 from models.cgpt import CGPT
@@ -20,31 +22,34 @@ from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
-
-from .COW import COW
-from .Find_RCR import find_windkessel
+import yaml
 
 # from operatorcow.inverse import optimize_input_test
 
-logger = logging.getLogger(__name__)
+#logger = logging.getLogger(__name__)
 
-OmegaConf.register_new_resolver(
-    "generate_random_seed", seeding.generate_random_seed, use_cache=True
-)
+#OmegaConf.register_new_resolver(
+#    "generate_random_seed", seeding.generate_random_seed, use_cache=True
+#)
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="sweep_config")
-def main(config: DictConfig) -> None:
+#@hydra.main(version_base=None, wandb.config_path="wandb.configs", wandb.config_name="sweep_wandb.config")
+def main() -> None:
+    with open("/home/wssk-ptw/Operator/operator-cow/src/operatorcow/configs/sweep_config.yaml") as file:
+        config = yaml.load(file, Loader = yaml.FullLoader)
 
-    if config.log:
-        wandb.init(
-            config=OmegaConf.to_container(config, resolve=True, throw_on_missing=True),
-            project=config.wandb.project,
-            tags=config.wandb.tags,
-            anonymous=config.wandb.anonymous,
-            mode=config.wandb.mode,
-            dir=Path(config.wandb.dir).absolute(),
-        )
+    run = wandb.init(config = config)
+    #print(wandb.wandb.config.trunk_size)
+
+    #if wandb.config.log:
+    #    wandb.init(
+    #        wandb.config=OmegaConf.to_container(wandb.config, resolve=True, throw_on_missing=True),
+    #        project=wandb.config.wandb.project,
+    #        tags=wandb.config.wandb.tags,
+    #        anonymous=wandb.config.wandb.anonymous,
+    #        mode=wandb.config.wandb.mode,
+    #        dir=Path(wandb.config.wandb.dir).absolute(),
+    #    )
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -183,45 +188,45 @@ def main(config: DictConfig) -> None:
 
     # load models
     model_surrogate = GNOT(
-        trunk_size=config.model.trunk_size,
-        branch_sizes=config.model.branch_sizes,
-        output_size=config.model.output_size,
-        space_dim=config.model.space_dim,
-        n_layers=config.model.n_layers,
-        n_hidden=config.model.n_hidden,
-        n_head=config.model.n_head,
-        n_experts=config.model.n_experts,
-        n_inner=config.model.n_inner,
-        mlp_layers=config.model.mlp_layers,
-        attn_type=config.model.attn_type,
-        act=config.model.act,
-        ffn_dropout=config.model.ffn_dropout,
-        attn_dropout=config.model.attn_dropout,
-        horiz_fourier_dim=config.model.horiz_fourier_dim,
+        trunk_size=wandb.config.trunk_size,
+        branch_sizes=wandb.config.branch_sizes,
+        output_size=wandb.config.output_size,
+        space_dim=wandb.config.space_dim,
+        n_layers=wandb.config.n_layers,
+        n_hidden=wandb.config.n_hidden,
+        n_head=wandb.config.n_head,
+        n_experts=wandb.config.n_experts,
+        n_inner=wandb.config.n_inner,
+        mlp_layers=wandb.config.mlp_layers,
+        attn_type=wandb.config.attn_type,
+        act=wandb.config.act,
+        ffn_dropout=wandb.config.ffn_dropout,
+        attn_dropout=wandb.config.attn_dropout,
+        horiz_fourier_dim=wandb.config.horiz_fourier_dim,
     )
     # AE_model = MLAE(
-    #    layers=config.model.ae.layers,
+    #    layers=wandb.config.ae.layers,
     # )
     VANO_model = VANO(
-        layers_encoder=config.model.VANO.layers_encoder,
-        layers_decoder=config.model.VANO.layers_decoder,
-        latent_dim=config.model.VANO.latent_dim,
+        layers_encoder=wandb.config.layers_encoder,
+        layers_decoder=wandb.config.layers_decoder,
+        latent_dim=wandb.config.latent_dim,
     )
     # Load model weights
     model_surrogate = model_surrogate.to(device)
     # AE_model = AE_model.to(device)
     VANO_model = VANO_model.to(device)
 
-    model_surrogate.load_state_dict(torch.load(config.model.surrogate_weights_path))
-    # AE_model.load_state_dict(torch.load(config.model.AE_weights_path))
-    VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
+    model_surrogate.load_state_dict(torch.load(wandb.config.surrogate_weights_path))
+    # AE_model.load_state_dict(torch.load(wandb.config.AE_weights_path))
+    VANO_model.load_state_dict(torch.load(wandb.config.VANO_weights_path))
 
     # need to iterate over folder vith validation data
 
     ## create arteries dict
     arteries_log = get_arteries_dict()
 
-    val_path = Path(config.data.data_path)
+    val_path = Path(wandb.config.data_path)
     L2s = []
     i = 0
     for subfolder in val_path.iterdir():
@@ -241,9 +246,9 @@ def main(config: DictConfig) -> None:
                 normalizer_y=normalizer_y,
                 normalizer_theta=normalizer_theta,
                 device=device,
-                joints_path=config.data.joints_path,
-                lr=config.lr,
-                track=config.log,
+                joints_path=wandb.config.joints_path,
+                lr=wandb.config.lr,
+                track=False,
                 data_path=d_p,
                 normalizer_u_bc=normalizer_u_bc,
                 model_VANO=VANO_model,
@@ -251,13 +256,13 @@ def main(config: DictConfig) -> None:
             )
 
             L2 = cow.solve_accumulate_2(
-                max_iters=config.max_iters,
-                eps=config.eps,
-                batch_size=config.batch_size,
-                lambda_mes=config.lambda_mes,
-                lambda_mass=config.lambda_mass,
-                lambda_pressure=config.lambda_pressure,
-                lambda_a0=config.lambda_a0,
+                max_iters=wandb.config.max_iters,
+                eps=wandb.config.eps,
+                batch_size=wandb.config.batch_size,
+                lambda_mes=wandb.config.lambda_mes,
+                lambda_mass=wandb.config.lambda_mass,
+                lambda_pressure=wandb.config.lambda_pressure,
+                lambda_a0=wandb.config.lambda_a0,
             )
             # estimate windkessel and perform simulation etc.
             # R2, C, Z = find_windkessel(
@@ -266,19 +271,19 @@ def main(config: DictConfig) -> None:
             # 5 in paper ML in cardiovascular flows
             # TODO zmodyfikować csv BY były dobre jointy
 
-            # cow.ROM_simulation(config.path_to_csv, 1,1, 1)
+            # cow.ROM_simulation(wandb.config.path_to_csv, 1,1, 1)
             # cow.set_ROM_mesurement()
             # another loop of training with new "mesurements"
 
             # L2 = cow.solve_accumulate_2(
-            #    max_iters=config.max_iters,
-            #    eps=config.eps,
-            #    batch_size=config.batch_size,
-            #    lambda_reg=config.lambda_reg,
-            #    lambda_bif=config.lambda_bif,
-            #    lambda_sv=config.lambda_sv,
-            #    lambda_mes=config.lambda_mes,
-            #    log_every=config.log_every,
+            #    max_iters=wandb.config.max_iters,
+            #    eps=wandb.config.eps,
+            #    batch_size=wandb.config.batch_size,
+            #    lambda_reg=wandb.config.lambda_reg,
+            #    lambda_bif=wandb.config.lambda_bif,
+            #    lambda_sv=wandb.config.lambda_sv,
+            #    lambda_mes=wandb.config.lambda_mes,
+            #    log_every=wandb.config.log_every,
             # )
 
             arteries_log = cow.get_validation(arteries_log)
