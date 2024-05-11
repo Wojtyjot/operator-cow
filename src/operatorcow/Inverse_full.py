@@ -49,10 +49,13 @@ def main(config: DictConfig) -> None:
 
     torch.manual_seed(2137)
 
-    # create normalizers from data not dataset.
+     #create normalizers from data not dataset.
     normalizer_x = UnitTransformer_2(
         mean=torch.Tensor([[1.8504, 0.4671]]), std=torch.Tensor([[3.1793, 0.2733]])
     )
+    #normalizer_x = UnitTransformer_2(
+    #    mean=torch.Tensor([[0.5, 0.5]]), std=torch.Tensor([[0.2945, 0.2916]])
+    #)
     normalizer_y = UnitTransformer_2(
         mean=torch.Tensor([[1.2793e05, 6.2301e-02, 2.5150e01]]),
         std=torch.Tensor([[2.3825e04, 4.3402e-02, 2.3625e01]]),
@@ -294,8 +297,8 @@ def main(config: DictConfig) -> None:
             # sys.exit()
             i += 1
 
-            if i == 10:
-                break
+            #if i == 10:
+            #    break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
     L2s = np.array(L2s)

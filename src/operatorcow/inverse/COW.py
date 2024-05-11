@@ -63,6 +63,8 @@ class Artery(object):
         self.inputs_f = inputs_f
         self.L = g.ndata["x"][-1, 0]
         self.T = g.ndata["x"][-1, 1]
+        #print(f"L = {self.L}")
+        #print(f"T = {self.T}")
         self.root = root
         self.mesurement = mesurement
         self.VANO = VANO
@@ -175,7 +177,7 @@ class Artery(object):
         Function return boundary condition
         """
         t = (
-            torch.linspace(0, self.T, 100).to(self.device).reshape(-1, 1)
+            torch.linspace(0, self.T, 100).to(self.device).reshape(-1, 1) # ZMIANA
         )  ## Need to pass T
         x = torch.zeros(100, 1).to(self.device).reshape(-1, 1)
         if self.VANO:
@@ -554,6 +556,12 @@ class COW(object):
                 self.HR = theta[-3]
             g = dgl.DGLGraph()
             g.add_nodes(X.shape[0])
+            L = X[-1, 0]
+            T = X[-1, 1]
+            #X[:, 0] = X[:, 0]/L
+            #X[:, 1] = X[:, 1]/T
+            #in_funcs[0][:,1] = in_funcs[0][:,1]/T
+            #in_funcs[3][:,0] = in_funcs[3][:,0]/L
             g.ndata["x"] = torch.from_numpy(X).float()
             g.ndata["y"] = torch.from_numpy(Y).float()  # y można wyjebać w większości
             # y potrzebny tlko do "pomiarów" bedzie lepiej pamięciowo
