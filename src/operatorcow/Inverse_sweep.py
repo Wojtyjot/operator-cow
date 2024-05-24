@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import wandb
+import yaml
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
 from inverse.COW import COW
 from inverse.Find_RCR import find_windkessel
@@ -22,26 +23,27 @@ from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
-import yaml
 
 # from operatorcow.inverse import optimize_input_test
 
-#logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
-#OmegaConf.register_new_resolver(
+# OmegaConf.register_new_resolver(
 #    "generate_random_seed", seeding.generate_random_seed, use_cache=True
-#)
+# )
 
 
-#@hydra.main(version_base=None, wandb.config_path="wandb.configs", wandb.config_name="sweep_wandb.config")
+# @hydra.main(version_base=None, wandb.config_path="wandb.configs", wandb.config_name="sweep_wandb.config")
 def main() -> None:
-    with open("/home/wssk-ptw/Operator/operator-cow/src/operatorcow/configs/sweep_config.yaml") as file:
-        config = yaml.load(file, Loader = yaml.FullLoader)
+    with open(
+        "/home/wssk-ptw/Operator/operator-cow/src/operatorcow/configs/sweep_config.yaml"
+    ) as file:
+        config = yaml.load(file, Loader=yaml.FullLoader)
 
-    run = wandb.init(config = config)
-    #print(wandb.wandb.config.trunk_size)
+    run = wandb.init(config=config)
+    # print(wandb.wandb.config.trunk_size)
 
-    #if wandb.config.log:
+    # if wandb.config.log:
     #    wandb.init(
     #        wandb.config=OmegaConf.to_container(wandb.config, resolve=True, throw_on_missing=True),
     #        project=wandb.config.wandb.project,

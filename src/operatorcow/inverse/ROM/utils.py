@@ -1,11 +1,11 @@
 import os
 import sys
+from pathlib import Path
 from typing import *
 
 import numpy as np
 import pandas as pd
 from ruamel.yaml.main import round_trip_dump as yaml_dump
-from pathlib import Path
 
 # Przydałoby sie zunifikowac joints w artery network i w openBF
 
@@ -18,8 +18,7 @@ def create_simulation_script(df: pd.DataFrame, project_name: str):
     # te parametry trzeba dac do jakiegos pliku i czytac
     # chyba ze zostawimy hardcoded i wyjebane
     # dodac p_ext do pliku
-    P_ext =9999.179
-
+    P_ext = 9999.179
 
     # hardcoded solver params
     rho = 1050.0
@@ -189,6 +188,7 @@ def compute_R_2(R_t: float, R_1: float):
     Func computes R2 for windkessel model
     """
     return R_t - R_1
+
 
 def create_results_folder(project_name: str):
     """

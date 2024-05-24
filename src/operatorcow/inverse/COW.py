@@ -55,7 +55,11 @@ class Artery(object):
         VANO: bool = True,
         normalizer_u_bc=None,
         condition=None,
+        cvs: bool = False,
+        r0s: torch.Tensor = None,
+        p_ref: torch.Tensor = None,
     ):
+        # musi tu byc self r0s i propagowane z r0s z cow do arteries w optymalizacji
         self.name = name
         self.g = g
         self.device = device
@@ -63,8 +67,8 @@ class Artery(object):
         self.inputs_f = inputs_f
         self.L = g.ndata["x"][-1, 0]
         self.T = g.ndata["x"][-1, 1]
-        #print(f"L = {self.L}")
-        #print(f"T = {self.T}")
+        # print(f"L = {self.L}")
+        # print(f"T = {self.T}")
         self.root = root
         self.mesurement = mesurement
         self.VANO = VANO
@@ -72,11 +76,19 @@ class Artery(object):
         if normalizer_u_bc is not None:
             self.normalizer_u_bc = normalizer_u_bc
         self.a0 = None
-        self.initialize_parameters(mesurement)
+        if cvs:
+            # TODO
+            # tutaj trzeba dodać gdzieś ref pressure.
+            # albo set ref pressure w load data
+            if r0s is None:
+                raise ValueError("r0s must be provided for CVS")
+            self.r0s = r0s
+            self.p_ref = p_ref
+        self.initialize_parameters(mesurement, cvs)
 
         # del self.g.ndata['y']
 
-    def initialize_parameters(self, measurement: bool):
+    def initialize_parameters(self, measurement: bool, cvs: bool = False):
         """
         Function to initialize parameters to optimize
 
@@ -96,7 +108,12 @@ class Artery(object):
 
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
-                self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+                if cvs:
+                    # jeszcze trzeba zrobic a0 z r0
+                    self.theta[29:47] = self.r0s
+                    self.a0 = self.compute_a0(self.r0s)
+                else:
+                    self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
                 self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze())
                 self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
                 self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
@@ -112,7 +129,13 @@ class Artery(object):
                 # self.parameters = [u0]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
                 self.parameters = None
-                self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+                if cvs:
+                    # jeszcze trzeba zrobic a0 z r0
+                    self.theta[29:47] = self.r0s
+                    self.a0 = self.compute_a0(self.r0s)
+                else:
+                    self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+                # self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
                 self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze())
                 self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
                 self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
@@ -124,7 +147,13 @@ class Artery(object):
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
-                self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+                if cvs:
+                    # jeszcze trzeba zrobic a0 z r0
+                    self.theta[29:47] = self.r0s
+                    self.a0 = self.compute_a0(self.r0s)
+                else:
+                    self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
+                # self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
                 self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze())
                 self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
                 self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
@@ -170,6 +199,35 @@ class Artery(object):
         """
         return self.parameters
 
+    def compute_a0(self, r0s: torch.Tensor):
+        """
+        Function computes a0 from r0s given indexing of arteries
+        """
+        arteries = [
+            "L_int_carotid_I",
+            "R_int_carotid_I",
+            # "R_vertebral",
+            # "L_vertebral",
+            "Basilar",
+            "L_int_carotid_II",
+            "R_int_carotid_II",
+            "L_PcoA",
+            "R_PcoA",
+            "L_MCA",
+            "R_MCA",
+            "L_ACA_A1",
+            "R_ACA_A1",
+            "L_PCA_P1",
+            "R_PCA_P1",
+            "L_ACA_A2",
+            "R_ACA_A2",
+            "AcoA",
+            "L_PCA_P2",
+            "R_PCA_P2",
+        ]
+        index = arteries.index(self.name)
+        return (torch.pi * r0s[index] ** 2).repeat(50).reshape(-1, 1).to(self.device)
+
     def get_u_BC(
         self, VANO_model: nn.Module = None, normalizer_u_bc=None, T: float = 1.0
     ):
@@ -177,7 +235,7 @@ class Artery(object):
         Function return boundary condition
         """
         t = (
-            torch.linspace(0, self.T, 100).to(self.device).reshape(-1, 1) # ZMIANA
+            torch.linspace(0, self.T, 100).to(self.device).reshape(-1, 1)  # ZMIANA
         )  ## Need to pass T
         x = torch.zeros(100, 1).to(self.device).reshape(-1, 1)
         if self.VANO:
@@ -434,6 +492,30 @@ class Artery(object):
             "R_MCA",
         ]
 
+    def set_p_ref(self, p_ref: torch.Tensor):
+        """
+        Function sets reference pressure computed in initial inverse problem
+        pre cvs case
+        """
+        self.p_ref = p_ref
+
+    def get_p_ref(self):
+        return self.p_ref
+
+    def update_theta(self, r0s: torch.Tensor):
+        self.theta[29:47] = r0s
+
+    def update_r0s(self, r0s: torch.Tensor):
+        self.r0s = r0s
+        self.update_theta(r0s)
+        self.a0 = self.compute_a0(r0s)
+
+    def set_p_pred(self, pred: torch.Tensor):
+        self.p_pred = pred
+
+    def get_p_pred(self):
+        return self.p_pred
+
 
 class COW(object):
     """
@@ -460,6 +542,9 @@ class COW(object):
         VANO: bool,
         model_VANO: nn.Module,
         normalizer_u_bc=None,
+        cvs: bool = False,
+        r0s_path: str = None,
+        p_ref_path: str = None,
     ):
         self.rho = 1.06  ## must be in CGS units
         # self.SV_true = None
@@ -490,7 +575,10 @@ class COW(object):
         self.normalizer_theta = normalizer_theta
         self.joints_path = joints_path  # TODO
         self.l2_loss = WeightedLpRelLoss(p=2, component="all", normalizer=None)
-        self.load_data(data_path)
+        self.load_data(
+            data_path=data_path, cvs=cvs, r0s_path=r0s_path, p_ref_path=p_ref_path
+        )
+        # self.load_p_ref(p_ref_path=p_ref_path)
         self.optimizer_mes = None
         self.optimizer_non_mes = None
         self.optimizer_full = None
@@ -502,8 +590,15 @@ class COW(object):
         self.propagate_CT()
         self.propagate_RT()
         self.joints = self.create_joints(joints_path)
+        # self.r0s = None # Trzbea doać to gdzieś w ładowaniu
 
-    def load_data(self, data_path: str):
+    def load_data(
+        self,
+        data_path: str,
+        cvs: bool = False,
+        r0s_path: str = None,
+        p_ref_path: str = None,
+    ):
         """
         Function to load data
 
@@ -515,7 +610,8 @@ class COW(object):
 
         Parameters
         ----------
-        data_path: str
+        data_path
+        : str
             path to folder containing npy files with data
         """
         arteries = [
@@ -542,90 +638,195 @@ class COW(object):
         ]
         self.arteries = []
 
-        for artery in arteries:
-            X, Y, theta, in_funcs = np.load(
-                data_path + artery + ".npy", allow_pickle=True
-            )
-            # if self.SV_true is None:
-            #    self.SV_true = theta[-1]
-            if self.RT_true is None:
-                self.RT_true = theta[-2]
-            if self.CT_true is None:
-                self.CT_true = theta[-1]
-            if self.HR is None:
-                self.HR = theta[-3]
-            g = dgl.DGLGraph()
-            g.add_nodes(X.shape[0])
-            L = X[-1, 0]
-            T = X[-1, 1]
-            #X[:, 0] = X[:, 0]/L
-            #X[:, 1] = X[:, 1]/T
-            #in_funcs[0][:,1] = in_funcs[0][:,1]/T
-            #in_funcs[3][:,0] = in_funcs[3][:,0]/L
-            g.ndata["x"] = torch.from_numpy(X).float()
-            g.ndata["y"] = torch.from_numpy(Y).float()  # y można wyjebać w większości
-            # y potrzebny tlko do "pomiarów" bedzie lepiej pamięciowo
-            # trzeba pamietac by usunac SV i dodawac z cow
-            theta = torch.from_numpy(theta).float()
-            condition = self.normalizer_theta.transform(
-                theta.to(self.device), inverse=False
-            )
-            condition = condition[:, :11]
-            # passing also true values for comparison
-            input_f = [torch.from_numpy(in_func).float() for in_func in in_funcs]
-            # moze na poczatek zrobic hardcoded mesurements?
-            if artery in ["L_int_carotid_I", "R_int_carotid_I", "Basilar"]:
-                self.arteries.append(
-                    Artery(
-                        g,
-                        input_f,
-                        theta[:-2],
-                        name=artery,
-                        device=self.device,
-                        root=True,
-                        mesurement=False,
-                        VANO=self.VANO,
-                        condition=condition,
-                    )
-                )
-            elif artery in [
-                "L_MCA",
-                "R_MCA",
-                "L_ACA_A1",
-                "R_ACA_A1",
-                "L_PCA_P1",
-                "R_PCA_P1",
-                # "L_ACA_A2",
-                # "R_ACA_A2",
-                # "L_PCA_P2",
-                # "R_PCA_P2",
-            ]:
-                self.arteries.append(
-                    Artery(
-                        g,
-                        input_f,
-                        theta[:-2],
-                        name=artery,
-                        device=self.device,
-                        mesurement=True,
-                        VANO=self.VANO,
-                        condition=condition,
-                    )
+        if cvs:
+            # TRZEBA r0s dodac
+            # LOAD r0s
+            r0s = np.load(r0s_path, allow_pickle=True)
+            r0s = torch.from_numpy(r0s).float()
+            self.r0s = r0s
+            for artery in arteries:
+                X, Y, theta, in_funcs = np.load(
+                    data_path + artery + ".npy", allow_pickle=True
                 )
 
-            else:
-                self.arteries.append(
-                    Artery(
-                        g,
-                        input_f,
-                        theta[:-2],
-                        name=artery,
-                        device=self.device,
-                        mesurement=False,
-                        VANO=self.VANO,
-                        condition=condition,
+                p_ref = np.load(
+                    p_ref_path + artery + "_pressure" + ".npy", allow_pickle=True
+                )
+                # if self.SV_true is None:
+                #    self.SV_true = theta[-1]
+                if self.RT_true is None:
+                    self.RT_true = theta[-2]
+                if self.CT_true is None:
+                    self.CT_true = theta[-1]
+                if self.HR is None:
+                    self.HR = theta[-3]
+                g = dgl.DGLGraph()
+                g.add_nodes(X.shape[0])
+                L = X[-1, 0]
+                T = X[-1, 1]
+                g.ndata["x"] = torch.from_numpy(X).float()
+                g.ndata["y"] = torch.from_numpy(
+                    Y
+                ).float()  # y można wyjebać w większości
+                # y potrzebny tlko do "pomiarów" bedzie lepiej pamięciowo
+                theta = torch.from_numpy(theta).float()
+                condition = self.normalizer_theta.transform(
+                    theta.to(self.device), inverse=False
+                )
+                condition = condition[:, :11]
+                # passing also true values for comparison
+                input_f = [torch.from_numpy(in_func).float() for in_func in in_funcs]
+                # moze na poczatek zrobic hardcoded mesurements?
+                if artery in ["L_int_carotid_I", "R_int_carotid_I", "Basilar"]:
+                    self.arteries.append(
+                        Artery(
+                            g,
+                            input_f,
+                            theta[:-2],
+                            name=artery,
+                            device=self.device,
+                            root=True,
+                            mesurement=False,
+                            VANO=self.VANO,
+                            condition=condition,
+                            cvs=cvs,
+                            r0s=r0s,
+                            p_ref=p_ref,
+                        )
                     )
-                )  # Theta in arteries is without SV
+                elif artery in [
+                    "L_MCA",
+                    "R_MCA",
+                    "L_ACA_A1",
+                    "R_ACA_A1",
+                    "L_PCA_P1",
+                    "R_PCA_P1",
+                    # "L_ACA_A2",
+                    # "R_ACA_A2",
+                    # "L_PCA_P2",
+                    # "R_PCA_P2",
+                ]:
+                    self.arteries.append(
+                        Artery(
+                            g,
+                            input_f,
+                            theta[:-2],
+                            name=artery,
+                            device=self.device,
+                            mesurement=True,
+                            VANO=self.VANO,
+                            condition=condition,
+                            cvs=cvs,
+                            r0s=r0s,
+                            p_ref=p_ref,
+                        )
+                    )
+
+                else:
+                    self.arteries.append(
+                        Artery(
+                            g,
+                            input_f,
+                            theta[:-2],
+                            name=artery,
+                            device=self.device,
+                            mesurement=False,
+                            VANO=self.VANO,
+                            condition=condition,
+                            cvs=cvs,
+                            r0s=r0s,
+                            p_ref=p_ref,
+                        )
+                    )  # Theta in arteries is without SV
+
+        else:
+
+            for artery in arteries:
+                X, Y, theta, in_funcs = np.load(
+                    data_path + artery + ".npy", allow_pickle=True
+                )
+                # if self.SV_true is None:
+                #    self.SV_true = theta[-1]
+                if self.RT_true is None:
+                    self.RT_true = theta[-2]
+                if self.CT_true is None:
+                    self.CT_true = theta[-1]
+                if self.HR is None:
+                    self.HR = theta[-3]
+                g = dgl.DGLGraph()
+                g.add_nodes(X.shape[0])
+                L = X[-1, 0]
+                T = X[-1, 1]
+                # X[:, 0] = X[:, 0]/L
+                # X[:, 1] = X[:, 1]/T
+                # in_funcs[0][:,1] = in_funcs[0][:,1]/T
+                # in_funcs[3][:,0] = in_funcs[3][:,0]/L
+                g.ndata["x"] = torch.from_numpy(X).float()
+                g.ndata["y"] = torch.from_numpy(
+                    Y
+                ).float()  # y można wyjebać w większości
+                # y potrzebny tlko do "pomiarów" bedzie lepiej pamięciowo
+                # trzeba pamietac by usunac SV i dodawac z cow
+                theta = torch.from_numpy(theta).float()
+                condition = self.normalizer_theta.transform(
+                    theta.to(self.device), inverse=False
+                )
+                condition = condition[:, :11]
+                # passing also true values for comparison
+                input_f = [torch.from_numpy(in_func).float() for in_func in in_funcs]
+                # moze na poczatek zrobic hardcoded mesurements?
+                if artery in ["L_int_carotid_I", "R_int_carotid_I", "Basilar"]:
+                    self.arteries.append(
+                        Artery(
+                            g,
+                            input_f,
+                            theta[:-2],
+                            name=artery,
+                            device=self.device,
+                            root=True,
+                            mesurement=False,
+                            VANO=self.VANO,
+                            condition=condition,
+                        )
+                    )
+                elif artery in [
+                    "L_MCA",
+                    "R_MCA",
+                    "L_ACA_A1",
+                    "R_ACA_A1",
+                    "L_PCA_P1",
+                    "R_PCA_P1",
+                    # "L_ACA_A2",
+                    # "R_ACA_A2",
+                    # "L_PCA_P2",
+                    # "R_PCA_P2",
+                ]:
+                    self.arteries.append(
+                        Artery(
+                            g,
+                            input_f,
+                            theta[:-2],
+                            name=artery,
+                            device=self.device,
+                            mesurement=True,
+                            VANO=self.VANO,
+                            condition=condition,
+                        )
+                    )
+
+                else:
+                    self.arteries.append(
+                        Artery(
+                            g,
+                            input_f,
+                            theta[:-2],
+                            name=artery,
+                            device=self.device,
+                            mesurement=False,
+                            VANO=self.VANO,
+                            condition=condition,
+                        )
+                    )  # Theta in arteries is without SV
 
     def create_joints(self, joints_csv):
         """
@@ -658,7 +859,25 @@ class COW(object):
             )
         return joints
 
-    def create_optimizer(self, lr: float = 0.5, optim: str = "RT"):
+    def load_ref_pressure(self, path: str):
+        """
+        Function loads reference pressure computed during initial inverse
+
+        ever artery has its own npy file with pressure file
+
+        path: str
+            path to folder with npy files
+        """
+        for artery in self.arteries:
+            artery.p_ref = (
+                torch.from_numpy(
+                    np.load(path + artery.name + ".npy", allow_pickle=True)
+                )
+                .float()
+                .to(self.device)
+            )
+
+    def create_optimizer(self, lr: float = 0.5, optim: str = "RT", cvs: bool = False):
         """
         Function creates a single optimizer for all arterial parameters
         """
@@ -666,59 +885,78 @@ class COW(object):
         if optim not in ["RT", "MES", "NON_MES", "FULL"]:
             raise ValueError("Optimizer not recognized")
 
-        if optim == "RT":
-            p = [self.RT.requires_grad_(True)]
-            self.optimizer_RT = torch.optim.Adam(p, lr=lr)
+        if cvs:
+            # trzeba dodać r0 do parametrów i propagować te informacje w theta
+            if optim == "RT":
+                p = [self.RT.requires_grad_(True)]
+                self.optimizer_RT = torch.optim.Adam(p, lr=lr)
 
-        elif optim == "MES":
-            p = []
+            elif optim == "MES":
+                p = []
 
-            for artery in self.arteries:
-                if artery.get_parameters() is not None and artery.has_mesurement():
-                    p.extend(artery.get_parameters())
-            p.extend([self.RT.requires_grad_(True)])
-            self.optimizer_mes = torch.optim.Adam(p, lr=lr)
+                for artery in self.arteries:
+                    if artery.get_parameters() is not None and artery.has_mesurement():
+                        p.extend(artery.get_parameters())
+                p.extend([self.RT.requires_grad_(True)])
+                p.extend(
+                    [self.r0s.requires_grad_(True)]
+                )  # muszą być dodatnie może torch.exp(r0s)?
+                self.optimizer_mes = torch.optim.Adam(p, lr=lr)
 
-        elif optim == "NON_MES":
-            p = []
-            for artery in self.arteries:
-                if artery.get_parameters() is not None and not artery.has_mesurement():
-                    p.extend(artery.get_parameters())
-            p.extend([self.RT.requires_grad_(True)])
-            self.optimizer_non_mes = torch.optim.Adam(p, lr=lr)
+            elif optim == "NON_MES":
+                p = []
+                for artery in self.arteries:
+                    if (
+                        artery.get_parameters() is not None
+                        and not artery.has_mesurement()
+                    ):
+                        p.extend(artery.get_parameters())
+                p.extend([self.RT.requires_grad_(True)])
+                p.extend([self.r0s.requires_grad_(True)])
+                self.optimizer_non_mes = torch.optim.Adam(p, lr=lr)
 
-        elif optim == "FULL":
-            p = []
-            for artery in self.arteries:
-                if artery.get_parameters() is not None:
-                    p.extend(artery.get_parameters())
-            p.extend([self.RT.requires_grad_(True)])
-            self.optimizer_full = torch.optim.Adam(p, lr=lr)
+            elif optim == "FULL":
+                p = []
+                for artery in self.arteries:
+                    if artery.get_parameters() is not None:
+                        p.extend(artery.get_parameters())
+                p.extend([self.RT.requires_grad_(True)])
+                p.extend([self.r0s.requires_grad_(True)])
+                self.optimizer_full = torch.optim.Adam(p, lr=lr)
 
-        # p2 = []
-        # p3 = []
-        # for artery in self.arteries:
-        #    if artery.get_parameters() is not None and artery.has_mesurement():
-        #        p.extend(artery.get_parameters())
-        #    elif artery.get_parameters() is not None and not artery.has_mesurement():
-        #        p2.extend(artery.get_parameters())
-        #
-        #    if artery.get_parameters() is not None:
-        #        p3.extend(artery.get_parameters())
-        # print(self.SV.requires_grad_(True).is_leaf)
-        # p.extend([self.RT.requires_grad_(True)])
-        # p2.extend([self.RT.requires_grad_(True)])
-        # p3.extend([self.RT.requires_grad_(True)])
-        # print(len(p))
-        # print(len(p2))
-        # print(len(p3))
-        # p4 = [self.RT.requires_grad_(True)]
-        # p5 = [self.CT.requires_grad_(True)]
-        # self.optimizer_ct = torch.optim.Adam(p5, lr=lr)
-        # self.optimizer_tr = torch.optim.Adam(p4, lr=lr)
-        # self.optimizer_mes = torch.optim.Adam(p, lr=lr)
-        # self.optimizer_non_mes = torch.optim.Adam(p2, lr=lr)
-        # self.optimizer_full = torch.optim.Adam(p3, lr=lr)
+        else:
+
+            if optim == "RT":
+                p = [self.RT.requires_grad_(True)]
+                self.optimizer_RT = torch.optim.Adam(p, lr=lr)
+
+            elif optim == "MES":
+                p = []
+
+                for artery in self.arteries:
+                    if artery.get_parameters() is not None and artery.has_mesurement():
+                        p.extend(artery.get_parameters())
+                p.extend([self.RT.requires_grad_(True)])
+                self.optimizer_mes = torch.optim.Adam(p, lr=lr)
+
+            elif optim == "NON_MES":
+                p = []
+                for artery in self.arteries:
+                    if (
+                        artery.get_parameters() is not None
+                        and not artery.has_mesurement()
+                    ):
+                        p.extend(artery.get_parameters())
+                p.extend([self.RT.requires_grad_(True)])
+                self.optimizer_non_mes = torch.optim.Adam(p, lr=lr)
+
+            elif optim == "FULL":
+                p = []
+                for artery in self.arteries:
+                    if artery.get_parameters() is not None:
+                        p.extend(artery.get_parameters())
+                p.extend([self.RT.requires_grad_(True)])
+                self.optimizer_full = torch.optim.Adam(p, lr=lr)
 
     def loader_GNOT(self, batch_size, batch_idx=None):
         # Loader dla gnota req loss mozna w jednym batchu?
@@ -750,33 +988,6 @@ class COW(object):
                 else:
                     raise NotImplementedError
             yield batched, indices
-
-    def loader_AE(self, batch_size, batch_idx=None):
-        # Loader dla AE # yield also indicies
-        if 0 in batch_idx:
-            batch_idx.remove(0)
-        elif 1 in batch_idx:
-            batch_idx.remove(1)
-        elif 2 in batch_idx:
-            batch_idx.remove(2)
-
-        if batch_idx is not None:
-            batch_idx = [batch_idx]
-        else:
-            batch_idx = [
-                list(range(i, min(i + batch_size, len(self.arteries))))
-                for i in range(3, len(self.arteries), batch_size)  # idx 0,1,2 to root
-            ]
-        for indices in batch_idx:
-            transposed = zip(*[self.get_arteries(idx, "AE") for idx in indices])
-            batched = []
-            for sample in transposed:
-                if isinstance(sample[0], torch.Tensor):
-                    batched.append(torch.stack(sample))
-                else:
-                    raise NotImplementedError
-
-            yield batched
 
     def solve_arteries(self, batch_size: int, batch_idx=None):
         """
@@ -810,6 +1021,7 @@ class COW(object):
                 # tu musi byc funkcja do zapisu wynikow do artery
                 # print(idx)
                 self.update_arteries(out, idx)
+                return out, idx
 
         else:
             for batch, idx in self.loader_GNOT(batch_size):
@@ -836,6 +1048,7 @@ class COW(object):
                 # tu musi byc funkcja do zapisu wynikow do artery
                 # print(idx)
                 self.update_arteries(out, idx)
+                return out, idx
 
     def compute_validation_l2_loss(self, batch_size: int):
         """
@@ -876,89 +1089,6 @@ class COW(object):
                 #        str(j),
                 #    )
         return loss / i
-
-    def get_reg_loss(
-        self, batch_size: int, batch_idx=None
-    ):  # raczej różny bs dla AE i GNOT
-        """
-        Function computes regularization loss from AE
-        """
-        reg_loss = 0
-
-        if batch_idx is not None:
-            batch_idx = batch_idx
-            for batch in self.loader_AE(batch_size, batch_idx):
-                u_bc = batch[0]
-                # normalization needs to be done  ned to add dimensions 2
-                u_bc = torch.cat(
-                    (
-                        torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
-                        u_bc.unsqueeze(-1),
-                    ),
-                    dim=-1,
-                )
-                u_bc = u_bc.reshape(-1, 3)
-                u_bc = self.normalizer_y.transform(u_bc, inverse=False)
-                u_bc = u_bc.reshape(batch[0].shape[0], -1, 3)
-                u_bc = u_bc[:, :, -1].squeeze()
-                u_bc = u_bc.to(self.device)
-                out = self.AE_model(u_bc)
-                try:
-                    out = torch.cat(
-                        (
-                            torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
-                            out.unsqueeze(-1),
-                        ),
-                        dim=-1,
-                    )
-                except:
-                    out = torch.cat(
-                        (torch.zeros(100, 2).to(self.device), out.unsqueeze(-1)), dim=-1
-                    )
-                out = out.reshape(-1, 3)
-                out = self.normalizer_y.transform(out, inverse=True)
-                out = out.reshape(batch[0].shape[0], -1, 3)
-                out = out[:, :, -1].squeeze()
-                reg_loss += nn.MSELoss()(u_bc, out)
-        else:
-            for batch in self.loader_AE(batch_size):
-                u_bc = batch[0]
-                # normalization needs to be done  ned to add dimensions 2
-                # print(f"u_bc.shape = {u_bc.shape}")
-                u_bc = torch.cat(
-                    (
-                        torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
-                        u_bc.unsqueeze(-1),
-                    ),
-                    dim=-1,
-                )
-                # print(f"u_bc.shape = {u_bc.shape}")
-                u_bc = u_bc.reshape(-1, 3)
-                u_bc = self.normalizer_y.transform(u_bc, inverse=False)
-                u_bc = u_bc.reshape(batch[0].shape[0], -1, 3)
-                u_bc = u_bc[:, :, -1].squeeze()
-                u_bc = u_bc.to(self.device)
-                # print(f"u_bc.shape before me = {u_bc.shape}")
-                out = self.AE_model(u_bc)
-                # print(out.shape)
-                try:
-                    out = torch.cat(
-                        (
-                            torch.zeros(batch[0].shape[0], 100, 2).to(self.device),
-                            out.unsqueeze(-1),
-                        ),
-                        dim=-1,
-                    )
-                except:
-                    out = torch.cat(
-                        (torch.zeros(100, 2).to(self.device), out.unsqueeze(-1)), dim=-1
-                    )
-                out = out.reshape(-1, 3)
-                out = self.normalizer_y.transform(out, inverse=True)
-                out = out.reshape(batch[0].shape[0], -1, 3)
-                out = out[:, :, -1].squeeze()
-                reg_loss += nn.MSELoss()(u_bc, out)
-        return reg_loss
 
     def compute_bifurcation_loss(self, j=None):
         """
@@ -1149,16 +1279,21 @@ class COW(object):
                     )
         return loss
 
-    def compute_SV_loss(self):
+    def compute_pressure_loss(self, batch_idx=None):
         """
-        Function computes stroke volume regularization loss
+        Function computes pressure loss
         """
-        if self.SV < 70:
-            return torch.square(self.SV - 70)
-        elif self.SV > 140:
-            return torch.square(self.SV - 140)
+        # p_ref p predicted duing initial inverse problem
+        loss = 0
+        if batch_idx is not None:
+            for idx in batch_idx:
+                loss += nn.MSELoss()(
+                    self.arteries[idx].get_p_ref(), self.arteries[idx].get_p_pred()
+                )
         else:
-            return 0
+            for artery in self.arteries:
+                loss += nn.MSELoss()(artery.get_p_ref(), artery.get_p_pred())
+        return loss
 
     def update_arteries(self, pred: torch.Tensor, idx: List[int]):
         """
@@ -1181,10 +1316,34 @@ class COW(object):
             self.arteries[idx].set_p_in(pred[i, :100, 0])
             self.arteries[idx].set_p_out(pred[i, -100:, 0])
             self.arteries[idx].set_a0_rec(pred[i, 0::100, 1])
+            self.arteries[idx].set_p_pred(pred[i, :, 0])
             if self.arteries[idx].has_mesurement():
                 self.arteries[idx].set_reconstructed_u_mesurement(
                     pred[i, 100 * 25 : 100 * 26, 2]
                 )
+
+    def save_ref_pressure(self, path: str, pred: torch.Tensor, idx: List[int]):
+        """
+        Function saves ref pressue for cvs prediction
+        """
+        #### FOR FULLL ONLY NOW
+        if len(idx) != len(self.arteries):
+            raise ValueError("ONLY FULL COW IDX IMPLEMENTED")
+
+        for i, idx in enumerate(idx):
+            np.save(
+                path + self.arteries[idx].name + "_pressure" + ".npy",
+                pred[i, :, 0].detach().cpu().numpy(),
+            )
+
+    def dump_r0s(self, path: str):
+        """
+        Function saves r0 values from theta as initial guess for cvs inverse
+        """
+        r0s = []
+        for artery in self.arteries:
+            r0s.append(artery.get_r0())
+        np.save(path + "r0s.npy", r0s)
 
     def get_arteries(self, idx, model: str = "GNOT"):
         try:
@@ -1193,14 +1352,6 @@ class COW(object):
             )
         except ValueError:
             pass
-
-    def propagate_SV(self):
-        """
-        Function passes SV value to arteries
-        """
-
-        for artery in self.arteries:
-            artery.set_SV(self.SV)
 
     def propagate_RT(self):
         """
@@ -1224,6 +1375,13 @@ class COW(object):
         for artery in self.arteries:
             artery.set_CT(self.CT)
 
+    def propagate_r0s(self):
+        """
+        Function passes r0s to arteries during optimization
+        """
+        for artery in self.arteries:
+            artery.update_r0s(self.r0s)
+
     def log_arteries(self):
         """
         Function logs all arteries to wandb
@@ -1243,245 +1401,6 @@ class COW(object):
             for artery in self.arteries:
                 loss += nn.MSELoss()(artery.get_a0_rec(), artery.get_a0())
             return loss
-
-    def solve(
-        self,
-        max_iters: int,
-        eps: float,
-        batch_size: int,
-        lambda_reg: float,
-        lambda_mes: float,
-        lambda_sv: float,
-        lambda_bif: float,
-        log_every: int,
-    ):
-        """
-        Function for solving inverse problem on whole COW:
-
-        step 1 solve each artery separately
-        step 2 ccompute loss,
-        step 3 compute gradients
-        step 4 update trainable parameters
-        """
-        iter = 0
-        for i in range(max_iters):
-            iter += 1
-            self.solve_arteries(batch_size)
-            loss = 0
-            # loss += lambda_reg * self.get_reg_loss(batch_size)
-            loss += lambda_mes * self.compute_mesurement_loss()
-            # loss += lambda_sv * self.compute_SV_loss()
-            loss_mass, loss_pressure = self.compute_bifurcation_loss()
-            loss += lambda_bif * (loss_mass + loss_pressure)
-            self.optimizer_full.zero_grad()
-            loss.backward()
-            self.optimizer_full.step()
-            # self.propagate_SV()
-            self.propagate_CT()
-            self.propagate_RT()
-            print(loss.item())
-            if self.track and iter % log_every == 0:
-                wandb.log(
-                    {
-                        "loss": loss.item(),
-                        # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
-                        "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
-                        # "SV_loss": lambda_sv * self.compute_SV_loss(),
-                        "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
-                    }
-                )
-                self.log_arteries()
-                wandb.log(
-                    {
-                        # "SV": self.SV.item(),
-                        "Validation loss": self.compute_validation_l2_loss(
-                            batch_size
-                        ).item(),
-                    },
-                )
-
-            if loss < eps:
-                break
-
-        validation_loss = self.compute_validation_l2_loss(batch_size)
-        wandb.log({"Validation loss": validation_loss.item()})
-        return validation_loss
-
-    def solve_accumulate(
-        self,
-        max_iters: int,
-        eps: float,
-        batch_size: int,
-        lambda_reg: float,
-        lambda_mes: float,
-        lambda_sv: float,
-        lambda_bif: float,
-        log_every: int,
-    ):
-        """
-        Solving inverse proble one joint at a time and accumulating
-        gradient
-        """
-        it = 0
-        for i in range(max_iters):
-            # print(self.arteries[11].get_parameters())
-            # print(self.arteries[9].get_parameters())
-            self.optimizer_non_mes.zero_grad()
-            self.optimizer_full.zero_grad()
-            for idx, joint in enumerate(self.joints):
-                self.optimizer_mes.zero_grad()
-                self.optimizer_tr.zero_grad()
-                # self.optimizer_ct.zero_grad()
-
-                # if idx ==8 and it>1:
-                #  break
-                loss = 0
-                p, d1, d2, merging = joint
-                batch_idx = [int(p), int(d1), int(d2)]
-                # print(p)
-                # print(d1)
-                # print(d2)
-                self.solve_arteries(batch_size, batch_idx)
-                # loss += lambda_reg * self.get_reg_loss(batch_size, batch_idx)
-                if it < 2:
-                    loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
-                    # loss += lambda_sv * self.compute_SV_loss()
-                    # if loss == 0:
-                    #  loss += nn.MSELoss()(torch.Tensor([loss]), 1e-8)
-                    loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
-                    loss += lambda_bif * (loss_mass + loss_pressure)
-                    # loss = loss / len(self.joints)
-                    loss_a0 = self.compute_a0_loss(batch_idx)
-                    loss += loss_a0
-                    loss.backward()
-                    # self.optimizer_mes.step()
-                    # loss.backward()
-                    self.optimizer_tr.step()
-                    # print(f"joint {idx}, mass_loss = {loss_mass}")
-                    # print(f"joint {idx}, pressure loss = {loss_pressure}")
-                    # print(f"a0 loss = {loss_a0}")
-                    # print(f"mesurement loss = {self.compute_mesurement_loss(batch_idx)}")
-                    # print(batch_idx)
-                    # for i in batch_idx:
-                    #    self.arteries[i].log()
-                    #    if self.arteries[i].has_mesurement() and it %100 == 0:
-                    #        print(f"{i} has mesurement")
-                    #        self.arteries[i].log_mesurement()
-                    print(f"RT = {self.RT}")
-                    print(f"CT = {self.CT}")
-
-                elif it < 500 and it >= 2:
-
-                    loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
-                    # loss += lambda_sv * self.compute_SV_loss()
-                    # if loss == 0:
-                    #  loss += nn.MSELoss()(torch.Tensor([loss]), 1e-8)
-                    loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
-                    loss += 1e-20 * lambda_bif * (loss_mass + loss_pressure)
-                    # loss = loss / len(self.joints)
-                    loss_a0 = self.compute_a0_loss(batch_idx)
-                    loss += loss_a0
-                    loss.backward()
-                    self.optimizer_mes.step()
-                    # print(f"joint {idx}, mass_loss = {loss_mass}")
-                    # print(f"joint {idx}, pressure loss = {loss_pressure}")
-                    # print(f"a0 loss = {loss_a0}")
-                    # print(f"mesurement loss = {self.compute_mesurement_loss(batch_idx)}")
-                    # print(batch_idx)
-                    # for i in batch_idx:
-                    #    self.arteries[i].log()
-                    #    if self.arteries[i].has_mesurement() and it %100 == 0:
-                    #        print(f"{i} has mesurement")
-                    #        self.arteries[i].log_mesurement()
-
-                elif it >= 500 and it < 1000:
-                    # sys.exit()
-                    loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
-
-                    loss += (
-                        lambda_bif
-                        * (500 * loss_mass + loss_pressure / 10000)
-                        / len(self.joints)
-                    )
-                    loss_a0 = self.compute_a0_loss(batch_idx)
-                    loss += 1000 * loss_a0
-                    loss.backward()
-                    print(f"joint {idx}, mass_loss = {loss_mass}")
-                    print(f"joint {idx}, pressure loss = {loss_pressure}")
-                    print(f"a0 loss = {loss_a0}")
-                    self.optimizer_non_mes.step()
-
-                else:
-                    loss += lambda_mes * self.compute_mesurement_loss(batch_idx)
-                    # loss += lambda_sv * self.compute_SV_loss()
-                    loss_mass, loss_pressure = self.compute_bifurcation_loss(joint)
-
-                    loss += (
-                        lambda_bif
-                        * (500 * loss_mass + loss_pressure / 10000)
-                        / len(self.joints)
-                    )
-                    loss_a0 = self.compute_a0_loss(batch_idx)
-                    loss += 1000 * loss_a0
-
-                    print(f"joint {idx}, mass_loss = {loss_mass}")
-                    print(f"joint {idx}, pressure loss = {loss_pressure}")
-                    print(f"a0 loss = {loss_a0}")
-                    # loss = loss / len(self.joints)
-                    try:
-                        loss.backward()
-                        self.optimizer_full.step()
-                    except:
-                        pass
-            # if it >= 50 and it < 100:
-            #    self.optimizer_non_mes.step()
-            # else:
-            #    self.optimizer_full.step()
-
-            # self.optimizer.step()
-            # self.propagate_SV()
-
-            # self.propagate_CT()
-            self.propagate_RT()
-            self.update_CT()
-            self.propagate_CT()
-            # print(self.arteries[11].get_parameters())
-            # print(self.arterise[9].get_parameters())
-            print(loss.item())
-
-            # sys.exit()
-
-            if self.track and it % log_every == 0:
-                wandb.log(
-                    {
-                        "loss": loss.item(),
-                        # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
-                        # "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
-                        # "SV_loss": lambda_sv * self.compute_SV_loss(),
-                        "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
-                    }
-                )
-                # self.log_arteries()
-                print(f"val = {self.compute_validation_l2_loss(batch_size)}")
-                wandb.log(
-                    {
-                        # "SV": self.SV.item(),
-                        # "Validation loss": self.compute_validation_l2_loss(
-                        #     batch_size
-                        # ).item(),
-                    },
-                )
-
-            # if loss < eps:
-            #    break
-            it += 1
-
-        validation_loss = self.compute_validation_l2_loss(batch_size)
-        wandb.log({"Validation loss": validation_loss})
-        self.log_validation()
-
-        # iter += 1
-        return validation_loss
 
     def solve_accumulate_2(
         self,
@@ -1510,7 +1429,7 @@ class COW(object):
 
             loss = 0
 
-            self.solve_arteries(batch_size)
+            _, _ = self.solve_arteries(batch_size)
 
             if it < 2:
                 loss += lambda_mes * self.compute_mesurement_loss()
@@ -1569,35 +1488,7 @@ class COW(object):
             self.propagate_RT()
             self.update_CT()
             self.propagate_CT()
-            # if it == 1999:
-            #    self.purge_ROM_mesurements()
-            #    self.optimizer_mes = None
 
-            # print(loss.item())
-
-            # if self.track and it % log_every == 0:
-            #    wandb.log(
-            #        {
-            #            "loss": loss.item(),
-            #            # "reg_loss": lambda_reg * self.get_reg_loss(batch_size).item(),
-            #            # "mes_loss": lambda_mes * self.compute_mesurement_loss().item(),
-            #            # "SV_loss": lambda_sv * self.compute_SV_loss(),
-            #            "bif_loss": lambda_bif * (loss_mass + loss_pressure).item(),
-            #        }
-            #    )
-            #    # self.log_arteries()
-            #    print(f"val = {self.compute_validation_l2_loss(batch_size)}")
-            #    wandb.log(
-            #        {
-            #            # "SV": self.SV.item(),
-            #            # "Validation loss": self.compute_validation_l2_loss(
-            #            #     batch_size
-            #            # ).item(),
-            #        },
-            #    )
-
-            # if loss < eps:
-            #    break
             it += 1
 
         validation_loss = self.compute_validation_l2_loss(batch_size)
@@ -1606,6 +1497,116 @@ class COW(object):
         # self.log_validation()
 
         # iter += 1
+        out, idx = self.solve_arteries(batch_size)
+        self.save_ref_pressure("ref_pressure/", out, idx=idx)  # TODO ADD MANUALY
+        self.dump_r0s("r0s_path/")
+        return validation_loss
+
+    def solve_cvs(
+        self,
+        max_iters: int,
+        eps: float,
+        batch_size: int,
+        lambda_mes: float,
+        lambda_mass: float,
+        lambda_pressure: float,
+        lambda_a0: float,
+        lambda_p_ref: float,
+    ):
+        """
+        Function for solving inverse problem on whole COW with cvs
+        opimizing also A0
+        """
+        it = 0
+        for i in range(max_iters):
+            if self.optimizer_full is not None:
+                self.optimizer_full.zero_grad()
+            if self.optimizer_non_mes is not None:
+                self.optimizer_non_mes.zero_grad()
+            if self.optimizer_mes is not None:
+                self.optimizer_mes.zero_grad()
+            if self.optimizer_RT is not None:
+                self.optimizer_RT.zero_grad()
+
+            loss = 0
+
+            _, _ = self.solve_arteries(batch_size)
+
+            if it < 2:
+                loss += lambda_mes * self.compute_mesurement_loss()
+                loss_mass, loss_pressure = self.compute_bifurcation_loss()
+                loss += loss_mass + loss_pressure
+                loss_a0 = self.compute_a0_loss()
+                loss += loss_a0
+                loss += self.compute_pressure_loss()
+                loss.backward()
+                self.optimizer_RT.step()
+                # print(f"RT = {self.RT}")
+                # print(f"CT = {self.CT}")
+
+            elif it < 1000 and it >= 2:
+                if self.optimizer_mes is None:
+                    self.create_optimizer(self.lr, "MES", cvs=True)
+
+                loss += lambda_mes * self.compute_mesurement_loss()
+                loss_mass, loss_pressure = self.compute_bifurcation_loss()
+                loss += 1e-20 * (loss_mass + loss_pressure)
+                loss_a0 = self.compute_a0_loss()
+                loss += lambda_a0 * loss_a0
+                loss_p_ref = self.compute_pressure_loss()
+                loss += lambda_p_ref * loss_p_ref
+                loss.backward()
+                self.optimizer_mes.step()
+
+            elif it <= 2000 and it >= 1000:
+                if self.optimizer_non_mes is None:
+                    self.create_optimizer(self.lr, "NON_MES", cvs=True)
+                loss_mass, loss_pressure = self.compute_bifurcation_loss()
+
+                # loss += lambda_bif * (1000 * loss_mass + loss_pressure / 1e5)
+                loss += lambda_mass * loss_mass
+                loss += lambda_pressure * loss_pressure
+                loss_a0 = self.compute_a0_loss()
+                loss += lambda_a0 * loss_a0
+                loss_p_ref = self.compute_pressure_loss()
+                loss += lambda_p_ref * loss_p_ref
+                loss.backward()
+                self.optimizer_non_mes.step()
+
+            else:
+                if self.optimizer_full is None:
+                    self.create_optimizer(self.lr, "FULL", cvs=True)
+                loss += lambda_mes * self.compute_mesurement_loss()
+                loss_mass, loss_pressure = self.compute_bifurcation_loss()
+
+                # loss += lambda_bif * (1000 * loss_mass +   loss_pressure / 1e5)
+                loss += lambda_mass * loss_mass
+                loss += lambda_pressure * loss_pressure
+                loss_a0 = self.compute_a0_loss()
+                loss += lambda_a0 * loss_a0
+                loss_p_ref = self.compute_pressure_loss()
+                loss += lambda_p_ref * loss_p_ref
+
+                try:
+                    loss.backward()
+                    self.optimizer_full.step()
+                except:
+                    pass
+
+            self.propagate_RT()
+            self.update_CT()
+            self.propagate_CT()
+            self.propagate_r0s()
+
+            it += 1
+
+        validation_loss = self.compute_validation_l2_loss(batch_size)
+        # self.optimizer_mes = None
+        wandb.log({"Validation loss": validation_loss})
+        # self.log_validation()
+
+        # iter += 1
+
         return validation_loss
 
     def log_validation(self):

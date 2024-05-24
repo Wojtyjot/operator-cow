@@ -20,10 +20,10 @@ from inverse.ROM.utils import (
 def estimate_windkessel_func(
     arteries_df: pd.DataFrame,
     RT: float,
-    #P_sys: float,
-    #P_dia: float,
-    #SV: float,
-    #HR: float,
+    # P_sys: float,
+    # P_dia: float,
+    # SV: float,
+    # HR: float,
     rho: float,
     tau: Optional[float] = 1.34,
     COf: Optional[float] = 0.12,
@@ -42,8 +42,8 @@ def estimate_windkessel_func(
     df = arteries_df
     R1, R2, C = list(), list(), list()
     r0 = list()
-    #R_tot = compute_R_tot(P_sys, P_dia, SV, HR)
-    #C_tot = compute_C_tot(R_tot, tau)
+    # R_tot = compute_R_tot(P_sys, P_dia, SV, HR)
+    # C_tot = compute_C_tot(R_tot, tau)
     R_tot = RT
     C_tot = 1.34 / R_tot
 

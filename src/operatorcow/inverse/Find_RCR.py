@@ -1,9 +1,10 @@
 import multiprocessing
 
+# from inverse.COW import COW
+import sys
+
 import numpy as np
 import scipy.integrate
-#from inverse.COW import COW
-import sys
 
 # implementation based on https://github.com/PredictiveIntelligenceLab/1DBloodFlowPINNs
 
@@ -55,8 +56,6 @@ def dydt(p, t, theta, aa, bb, T):
     """
 
     Q, dQ_dt = compute_Q_dQ_dt(t, aa, bb, 50, T)
-    
-   
 
     R1, R2, C, Pinf = theta
     dp_dt = -p / R2 / C + (R1 + R2) / R2 / C * Q + Pinf / R2 / C + R1 * dQ_dt
@@ -132,7 +131,7 @@ def parallel_search_params(args):
 
 def search_params_parallel(R, C, t, p_exact, p, nn, R1, p_inf, T, aa, bb):
     pool = multiprocessing.Pool(
-        processes= multiprocessing.cpu_count()
+        processes=multiprocessing.cpu_count()
     )  # Number of CPU cores
     args_list = [
         (i, j, R1, t, p_exact, p, T, aa, bb, R, C, p_inf)
@@ -186,41 +185,40 @@ def find_windkessel(cow, num_iters: int):
             p.squeeze(),
             t.squeeze(),
         )
-        
+
         Q = np.multiply(A, u)
         T = np.max(t)
         p_exact = p
         p = p_exact[:]
-        #print(Q.shape)
+        # print(Q.shape)
         NN = Q.shape[0]
         z = compute_characteristic_impedance(cow.get_artery(int(key)), rho)
-        #print(z)
-        
+        # print(z)
 
         # compute fft
         aa, bb = get_fft(Q, T)
 
         t = t.flatten()
-        
 
         # initial coarse search
         # TODO na podstawie danych literaturowych oszacować zakres wyszukiwania
         # dodanmy gdy tim kliniczny zrobi robote
         import time
+
         nn = 10
         lb = np.array([14.0, -29.0])
         ub = np.array([29.0, -14.0])
         R_prop = np.exp(np.linspace(lb[0], ub[0], nn))
         C_prop = np.exp(np.linspace(lb[1], ub[1], nn))
         R_temp, C_temp = np.meshgrid(R_prop, C_prop)
-        #st = time.time()
+        # st = time.time()
         best_R, best_C, error, p_ = search_params_parallel(
             R_temp, C_temp, t, p_exact, p, nn, z, p_inf, T, aa, bb
         )
-        
-        #best_R, best_C, error, p_ = search_params(
+
+        # best_R, best_C, error, p_ = search_params(
         #    R_temp, C_temp, t, p_exact, p, nn, z, p_inf, T, aa, bb
-        #)
+        # )
 
         # adaptively refined search
         for i in range(0, num_iters):
@@ -232,8 +230,7 @@ def find_windkessel(cow, num_iters: int):
             best_R, best_C, error, p_ = search_params_parallel(
                 R_temp, C_temp, t, p_exact, p, nn, z, p_inf, T, aa, bb
             )
-            #best_R, best_C , error , p_ = search_params(R_temp, C_temp, t, p_exact, p, nn, z, p_inf, T, aa, bb)
-        
+            # best_R, best_C , error , p_ = search_params(R_temp, C_temp, t, p_exact, p, nn, z, p_inf, T, aa, bb)
 
         idx_row, idx_col = np.where(error == np.amin(error[np.nonzero(error)]))
         print(f"best error {error[idx_row, idx_col]}")
