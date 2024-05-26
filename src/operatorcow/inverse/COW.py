@@ -441,7 +441,7 @@ class Artery(object):
         return self.mesurement_value
 
     def get_a0(self):
-        return self.a0
+        return self.a0.squeeze()
 
     def set_a0_rec(self, a0_rec):
         self.a0_rec = a0_rec
@@ -652,6 +652,7 @@ class COW(object):
                 p_ref = np.load(
                     p_ref_path + artery + "_pressure" + ".npy", allow_pickle=True
                 )
+                p_ref = torch.from_numpy(p_ref).float().to(self.device)
                 # if self.SV_true is None:
                 #    self.SV_true = theta[-1]
                 if self.RT_true is None:
@@ -1292,6 +1293,8 @@ class COW(object):
                 )
         else:
             for artery in self.arteries:
+                #print(artery.get_p_ref().shape)
+                #print(artery.get_p_pred().shape)
                 loss += nn.MSELoss()(artery.get_p_ref(), artery.get_p_pred())
         return loss
 
@@ -1399,6 +1402,10 @@ class COW(object):
             return loss
         else:
             for artery in self.arteries:
+                #print("REC")
+                #print(artery.get_a0_rec().shape)
+                #print("TRUE")
+                #print(artery.get_a0().shape)
                 loss += nn.MSELoss()(artery.get_a0_rec(), artery.get_a0())
             return loss
 
@@ -1498,8 +1505,8 @@ class COW(object):
 
         # iter += 1
         out, idx = self.solve_arteries(batch_size)
-        self.save_ref_pressure("ref_pressure/", out, idx=idx)  # TODO ADD MANUALY
-        self.dump_r0s("r0s_path/")
+        self.save_ref_pressure("/home/wssk-ptw/Operator/COW_DATASET/CVS/p_ref/", out, idx=idx)  # TODO ADD MANUALY
+        self.dump_r0s("/home/wssk-ptw/Operator/COW_DATASET/CVS/r0s/")
         return validation_loss
 
     def solve_cvs(
@@ -1537,7 +1544,7 @@ class COW(object):
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
                 loss += loss_mass + loss_pressure
                 loss_a0 = self.compute_a0_loss()
-                loss += loss_a0
+                #loss += loss_a0
                 loss += self.compute_pressure_loss()
                 loss.backward()
                 self.optimizer_RT.step()
@@ -1552,11 +1559,12 @@ class COW(object):
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
                 loss += 1e-20 * (loss_mass + loss_pressure)
                 loss_a0 = self.compute_a0_loss()
-                loss += lambda_a0 * loss_a0
+                #loss += lambda_a0 * loss_a0
                 loss_p_ref = self.compute_pressure_loss()
                 loss += lambda_p_ref * loss_p_ref
-                loss.backward()
+                loss.backward(retain_graph=True)
                 self.optimizer_mes.step()
+                #print("step")
 
             elif it <= 2000 and it >= 1000:
                 if self.optimizer_non_mes is None:
@@ -1567,10 +1575,10 @@ class COW(object):
                 loss += lambda_mass * loss_mass
                 loss += lambda_pressure * loss_pressure
                 loss_a0 = self.compute_a0_loss()
-                loss += lambda_a0 * loss_a0
+                #loss += lambda_a0 * loss_a0
                 loss_p_ref = self.compute_pressure_loss()
                 loss += lambda_p_ref * loss_p_ref
-                loss.backward()
+                loss.backward(retain_graph=True)
                 self.optimizer_non_mes.step()
 
             else:
@@ -1583,12 +1591,12 @@ class COW(object):
                 loss += lambda_mass * loss_mass
                 loss += lambda_pressure * loss_pressure
                 loss_a0 = self.compute_a0_loss()
-                loss += lambda_a0 * loss_a0
+                #loss += lambda_a0 * loss_a0
                 loss_p_ref = self.compute_pressure_loss()
                 loss += lambda_p_ref * loss_p_ref
 
                 try:
-                    loss.backward()
+                    loss.backward(retain_graph=True)
                     self.optimizer_full.step()
                 except:
                     pass

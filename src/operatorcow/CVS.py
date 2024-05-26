@@ -32,7 +32,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="CVS")
+@hydra.main(version_base=None, config_path="configs", config_name="cvs")
 def main(config: DictConfig) -> None:
 
     if config.log:
@@ -223,10 +223,10 @@ def main(config: DictConfig) -> None:
     ## create arteries dict
     arteries_log = get_arteries_dict()
 
-    path_15386 = Path(config.data.path_15386)
-    r0s_path = Path(config.data.r0s_path)
-    p_ref_path = Path(config.data.p_ref_path)
-    cvs_path = Path(config.data.cvs_path)
+    path_15386 = config.data.path_15386
+    r0s_path = config.data.r0s_path
+    p_ref_path = config.data.p_ref_path
+    cvs_path = config.data.cvs_path
 
     L2s = []
     i = 0
@@ -235,139 +235,140 @@ def main(config: DictConfig) -> None:
     fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS/" + "NO_CVS"
     if not Path(fig_path).exists():
         Path(fig_path).mkdir(parents=True, exist_ok=True)
-
-    cow = COW(
-        model_surrogate=model_surrogate,
-        AE_model=None,
-        normalizer_x=normalizer_x,
-        normalizer_y=normalizer_y,
-        normalizer_theta=normalizer_theta,
-        device=device,
-        joints_path=config.data.joints_path,
-        lr=config.inverse.lr,
-        track=config.log,
-        data_path=path_15386,
-        normalizer_u_bc=normalizer_u_bc,
-        model_VANO=VANO_model,
-        VANO=True,
-    )
-
-    L2 = cow.solve_accumulate_2(
-        max_iters=config.inverse.max_iters,
-        eps=config.inverse.eps,
-        batch_size=config.inverse.batch_size,
-        lambda_mes=config.inverse.lambda_mes,
-        lambda_mass=config.inverse.lambda_mass,
-        lambda_pressure=config.inverse.lambda_pressure,
-        lambda_a0=config.inverse.lambda_a0,
-    )
-
-    arteries_log = cow.get_validation(arteries_log)
-    arteries_log_save = cow.get_validation(arteries_log_save)
-    L2s.append(L2)
-    cow.dump_plots(fig_path)
-    cow.dump_params(fig_path)
-    cow.dump_statistics(fig_path)
-    cow.dump_validation(fig_path, arteries_log_save)
-    # cow.dump_ROM_plots(fig_path)
-
-    print(f"Validation data: NO CVS")
-    print(L2)
-    # sys.exit()
-
-    # if i == 10:
-    #    break
-
-    tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
-    L2s = np.array(L2s)
-    tbl_l2.add_data(L2s.mean(), L2s.std())
-    wandb.log({"L2": tbl_l2})
-
-    tbl_arteries = wandb.Table(
-        columns=[
-            "Artery",
-            "rL2 Area mean",
-            "rL2 Area std",
-            "rL2 Velocity mean",
-            "rL2 Velocity std",
-            "rL2 Flow mean",
-            "rL2 Flow std",
-            "rL2 Pressure mean",
-            "rL2 Pressure std",
-        ]
-    )
-    # transform lists inside nested dict to numpy arrays
-    for artery in arteries_log:
-        for key in arteries_log[artery]:
-            arteries_log[artery][key] = np.array(arteries_log[artery][key])
-
-    for artery in arteries_log:
-        tbl_arteries.add_data(
-            artery,
-            arteries_log[artery]["Area"].mean(),
-            arteries_log[artery]["Area"].std(),
-            arteries_log[artery]["Velocity"].mean(),
-            arteries_log[artery]["Velocity"].std(),
-            arteries_log[artery]["Flow"].mean(),
-            arteries_log[artery]["Flow"].std(),
-            arteries_log[artery]["Pressure"].mean(),
-            arteries_log[artery]["Pressure"].std(),
+    if False :
+        cow = COW(
+            model_surrogate=model_surrogate,
+            AE_model=None,
+            normalizer_x=normalizer_x,
+            normalizer_y=normalizer_y,
+            normalizer_theta=normalizer_theta,
+            device=device,
+            joints_path=config.data.joints_path,
+            lr=config.inverse.lr,
+            track=config.log,
+            data_path=path_15386,
+            normalizer_u_bc=normalizer_u_bc,
+            model_VANO=VANO_model,
+            VANO=True,
         )
-    wandb.log({"Arteries": tbl_arteries})
 
-    for subfolder in cvs_path.iterdir():
-        if subfolder.is_dir():
-            arteries_log_save = get_arteries_dict()
-            fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS/" + str(
-                subfolder.name
+        L2 = cow.solve_accumulate_2(
+            max_iters=config.inverse.max_iters,
+            eps=config.inverse.eps,
+            batch_size=config.inverse.batch_size,
+            lambda_mes=config.inverse.lambda_mes,
+            lambda_mass=config.inverse.lambda_mass,
+            lambda_pressure=config.inverse.lambda_pressure,
+            lambda_a0=config.inverse.lambda_a0,
+        )
+
+        arteries_log = cow.get_validation(arteries_log)
+        arteries_log_save = cow.get_validation(arteries_log_save)
+        L2s.append(L2)
+        cow.dump_plots(fig_path)
+        cow.dump_params(fig_path)
+        cow.dump_statistics(fig_path)
+        cow.dump_validation(fig_path, arteries_log_save)
+        # cow.dump_ROM_plots(fig_path)
+
+        print(f"Validation data: NO CVS")
+        print(L2)
+        # sys.exit()
+
+        # if i == 10:
+        #    break
+        if config.log:
+            tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
+            L2s = np.array(L2s)
+            tbl_l2.add_data(L2s.mean(), L2s.std())
+            wandb.log({"L2": tbl_l2})
+
+            tbl_arteries = wandb.Table(
+                columns=[
+                    "Artery",
+                    "rL2 Area mean",
+                    "rL2 Area std",
+                    "rL2 Velocity mean",
+                    "rL2 Velocity std",
+                    "rL2 Flow mean",
+                    "rL2 Flow std",
+                    "rL2 Pressure mean",
+                    "rL2 Pressure std",
+                ]
             )
-            if not Path(fig_path).exists():
-                Path(fig_path).mkdir(parents=True, exist_ok=True)
+            # transform lists inside nested dict to numpy arrays
+            for artery in arteries_log:
+                for key in arteries_log[artery]:
+                    arteries_log[artery][key] = np.array(arteries_log[artery][key])
 
-            d_p = str(subfolder.resolve()) + "/"
+            for artery in arteries_log:
+                tbl_arteries.add_data(
+                    artery,
+                    arteries_log[artery]["Area"].mean(),
+                    arteries_log[artery]["Area"].std(),
+                    arteries_log[artery]["Velocity"].mean(),
+                    arteries_log[artery]["Velocity"].std(),
+                    arteries_log[artery]["Flow"].mean(),
+                    arteries_log[artery]["Flow"].std(),
+                    arteries_log[artery]["Pressure"].mean(),
+                    arteries_log[artery]["Pressure"].std(),
+                )
+            wandb.log({"Arteries": tbl_arteries})
 
-            cow = COW(
-                model_surrogate=model_surrogate,
-                AE_model=None,
-                normalizer_x=normalizer_x,
-                normalizer_y=normalizer_y,
-                normalizer_theta=normalizer_theta,
-                device=device,
-                joints_path=config.data.joints_path,
-                lr=config.inverse.lr,
-                track=config.log,
-                data_path=d_p,
-                normalizer_u_bc=normalizer_u_bc,
-                model_VANO=VANO_model,
-                VANO=True,
-                cvs=True,
-                r0s_path=r0s_path,
-                p_ref_path=p_ref_path,
-            )
+    for subfolder in ["CVS_0.6", "CVS_0.5", "CVS_0.4"]:
+        arteries_log = get_arteries_dict()
+        arteries_log_save = get_arteries_dict()
+        fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS/" + str(
+            subfolder
+        )
+        if not Path(fig_path).exists():
+            Path(fig_path).mkdir(parents=True, exist_ok=True)
 
-            L2 = cow.solve_cvs(
-                max_iters=config.inverse.max_iters,
-                eps=config.inverse.eps,
-                batch_size=config.inverse.batch_size,
-                lambda_mes=config.inverse.lambda_mes,
-                lambda_mass=config.inverse.lambda_mass,
-                lambda_pressure=config.inverse.lambda_pressure,
-                lambda_a0=config.inverse.lambda_a0,
-                lambda_p_ref=config.inverse.lambda_p_ref,
-            )
+        d_p = cvs_path + subfolder + "/"
 
-            arteries_log = cow.get_validation(arteries_log)
-            arteries_log_save = cow.get_validation(arteries_log_save)
-            L2s.append(L2)
-            cow.dump_plots(fig_path)
-            cow.dump_params(fig_path)
-            cow.dump_statistics(fig_path)
-            cow.dump_validation(fig_path, arteries_log_save)
-            # cow.dump_ROM_plots(fig_path)
+        cow = COW(
+            model_surrogate=model_surrogate,
+            AE_model=None,
+            normalizer_x=normalizer_x,
+            normalizer_y=normalizer_y,
+            normalizer_theta=normalizer_theta,
+            device=device,
+            joints_path=config.data.joints_path,
+            lr=config.inverse.lr,
+            track=config.log,
+            data_path=d_p,
+            normalizer_u_bc=normalizer_u_bc,
+            model_VANO=VANO_model,
+            VANO=True,
+            cvs=True,
+            r0s_path=r0s_path,
+            p_ref_path=p_ref_path,
+        )
 
-            print(f"Validation data: {subfolder}")
-            print(L2)
+        L2 = cow.solve_cvs(
+            max_iters=config.inverse.max_iters,
+            eps=config.inverse.eps,
+            batch_size=config.inverse.batch_size,
+            lambda_mes=config.inverse.lambda_mes,
+            lambda_mass=config.inverse.lambda_mass,
+            lambda_pressure=config.inverse.lambda_pressure,
+            lambda_a0=config.inverse.lambda_a0,
+            lambda_p_ref=config.inverse.lambda_p_ref,
+        )
 
+        arteries_log = cow.get_validation(arteries_log)
+        arteries_log_save = cow.get_validation(arteries_log_save)
+        L2s.append(L2)
+        cow.dump_plots(fig_path)
+        cow.dump_params(fig_path)
+        cow.dump_statistics(fig_path)
+        cow.dump_validation(fig_path, arteries_log_save)
+        # cow.dump_ROM_plots(fig_path)
+
+        print(f"Validation data: {subfolder}")
+        print(L2)
+
+        if config.log:
             tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
             L2s = np.array(L2s)
             tbl_l2.add_data(L2s.mean(), L2s.std())

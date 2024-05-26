@@ -24,14 +24,15 @@ wandb:
     - development
 
 data:
-  data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/
+  path_15386: /home/wssk-ptw/Operator/COW_DATASET/CVS/ref/
   joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
-  r0s_path: placeholder
-  p_ref_path: placeholder
+  r0s_path: /home/wssk-ptw/Operator/COW_DATASET/CVS/r0s/r0s.npy
+  p_ref_path: /home/wssk-ptw/Operator/COW_DATASET/CVS/p_ref/
+  cvs_path: /home/wssk-ptw/Operator/COW_DATASET/CVS/
   batch_size: 18
 
 
-log: False
+log: True
 
 model:
   name: GNOT
@@ -63,14 +64,14 @@ model:
 inverse:
   lambda_mass: 10000.0
   lambda_pressure: 0.00000001
-  lambda_mes: 100.0
+  lambda_mes: 1000.0
   lambda_a0: 1000.0
   max_iters: 3000
   eps: 0.000006
   batch_size: 18
   lr: 0.01
   log_every: 100
-  lambda_p_ref: 100.0
+  lambda_p_ref: 0.1
   path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
 
 
