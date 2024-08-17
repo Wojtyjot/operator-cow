@@ -1,4 +1,4 @@
-seed: 2137
+seed: ${generate_random_seed:}
 
 data_dir: ${hydra:runtime.cwd}/data
 
@@ -24,7 +24,7 @@ wandb:
     - development
 
 data:
-  data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/
+  data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION_PI/
   joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
   batch_size: 18
 

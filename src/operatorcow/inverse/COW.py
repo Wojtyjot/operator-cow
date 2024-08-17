@@ -515,6 +515,9 @@ class Artery(object):
 
     def get_p_pred(self):
         return self.p_pred
+    
+    def get_u_bc_rec(self):
+        return self.u_bc_rec
 
 
 class COW(object):
@@ -1491,6 +1494,8 @@ class COW(object):
                     self.optimizer_full.step()
                 except:
                     pass
+            if it % 10 == 0:
+                print(f"Loss = {loss}")
 
             self.propagate_RT()
             self.update_CT()
@@ -1504,9 +1509,10 @@ class COW(object):
         # self.log_validation()
 
         # iter += 1
-        out, idx = self.solve_arteries(batch_size)
-        self.save_ref_pressure("/home/wssk-ptw/Operator/COW_DATASET/CVS/p_ref/", out, idx=idx)  # TODO ADD MANUALY
-        self.dump_r0s("/home/wssk-ptw/Operator/COW_DATASET/CVS/r0s/")
+        if False:
+            out, idx = self.solve_arteries(batch_size)
+            self.save_ref_pressure("/home/wssk-ptw/Operator/COW_DATASET/CVS/p_ref/", out, idx=idx)  # TODO ADD MANUALY
+            self.dump_r0s("/home/wssk-ptw/Operator/COW_DATASET/CVS/r0s/")
         return validation_loss
 
     def solve_cvs(
@@ -1544,7 +1550,7 @@ class COW(object):
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
                 loss += loss_mass + loss_pressure
                 loss_a0 = self.compute_a0_loss()
-                #loss += loss_a0
+                loss += loss_a0
                 loss += self.compute_pressure_loss()
                 loss.backward()
                 self.optimizer_RT.step()
@@ -1743,24 +1749,28 @@ class COW(object):
             axs[0, 0].set_ylabel("cm/s")
             axs[0, 0].set_xlabel("time_step")
             axs[0, 0].legend()
+            axs[0, 0].grid()
             axs[0, 1].plot(a_in, label="Predicted")
             axs[0, 1].plot(a_in_true, label="True")
             axs[0, 1].set_title("Area")
             axs[0, 1].set_ylabel("cm^2")
             axs[0, 1].set_xlabel("time_step")
             axs[0, 1].legend()
+            axs[0, 1].grid()
             axs[1, 0].plot(p_in, label="Predicted")
             axs[1, 0].plot(p_in_true, label="True")
             axs[1, 0].set_title("Pressure")
             axs[1, 0].set_ylabel("Baye")
             axs[1, 0].set_xlabel("time_step")
             axs[1, 0].legend()
+            axs[1, 0].grid()
             axs[1, 1].plot(a_in * u_in, label="Predicted")
             axs[1, 1].plot(a_in_true * u_in_true, label="True")
             axs[1, 1].set_title("Flow")
             axs[1, 1].set_ylabel("cm^3/s")
             axs[1, 1].set_xlabel("time_step")
             axs[1, 1].legend()
+            axs[1, 1].grid()
             fig.suptitle(artery.name)
             plt.savefig(os.path.join(path, f"{artery.name}.png"))
             plt.close()
@@ -1916,6 +1926,28 @@ class COW(object):
                 f.write(
                     f"Relative L2 error = {np.mean(arteries[artery.name]['Flow'])}\n"
                 )
+
+    def dump_reconstructed_u_bc_plots(self, path: str):
+        """
+        Function dumps reconstructed u values to path
+        """
+        for artery in self.arteries:
+            u_in = artery.get_u_bc_rec().detach().cpu().numpy()
+            u_in_true = artery.get_true_u_in().detach().cpu().numpy()
+
+            fig, axs = plt.subplots(1, 1, figsize=(10, 10))
+            axs.plot(u_in, label="Rec")
+            axs.plot(u_in_true, label="True")
+            axs.set_title("Velocity")
+            axs.set_ylabel("cm/s")
+            axs.set_xlabel("time_step")
+            axs.legend()
+            axs.grid()
+            fig.suptitle(artery.name)
+            plt.savefig(os.path.join(path, f"{artery.name}_u_bc.png"))
+            plt.close()
+        
+
 
     def get_num_arteries(self):
         """

@@ -235,7 +235,7 @@ def main(config: DictConfig) -> None:
     fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS/" + "NO_CVS"
     if not Path(fig_path).exists():
         Path(fig_path).mkdir(parents=True, exist_ok=True)
-    if False :
+    if True :
         cow = COW(
             model_surrogate=model_surrogate,
             AE_model=None,
@@ -323,7 +323,7 @@ def main(config: DictConfig) -> None:
         )
         if not Path(fig_path).exists():
             Path(fig_path).mkdir(parents=True, exist_ok=True)
-
+        L2s = []
         d_p = cvs_path + subfolder + "/"
 
         cow = COW(

@@ -20,6 +20,7 @@ from models.optimizer import Adam
 from torch.optim.lr_scheduler import OneCycleLR
 from utils.GANO_utils import compute_statistics
 from utils.utils import MultipleTensors, get_num_params
+import torch.functional as F
 
 
 def train(
@@ -36,7 +37,7 @@ def train(
     normalizer_up,
     start_epoch: int = 0,
     print_freq: int = 20,
-    model_save_path: str = "../../data/checkpoints/",
+    model_save_path: str = "/home/wssk-ptw/Operator/operator-cow/data/checkpoints",
     model_name: str = "GNOT_FINAL_BIG.pt",
     result_name: str = "results.pt",
 ):
@@ -161,10 +162,10 @@ def validate_epoch(
 
             metric_val.append(metric)
             # TRZEBA ZRENORMALIZOWAĆ !!!!!!!!!
-            if len(plotted_vessels) < 10:
+            if len(plotted_vessels) < 11:
 
                 u_p = normalizer_up.transform(u_p, inverse=True)
-                artery = decode_artery(u_p[0][:10].cpu().numpy())  # tu nie 11?
+                artery = decode_artery(u_p[0][:11].cpu().numpy())  # tu nie 11?
 
                 if artery not in plotted_vessels:
                     plot_predictions(y_pred.cpu().numpy(), y.cpu().numpy(), artery)
@@ -629,7 +630,7 @@ def train_VANO(
     start_epoch: int = 0,
     print_freq: int = 20,
     model_save_path: str = "../../data/checkpoints/",
-    model_name: str = "VANO.pt",
+    model_name: str = "VANO_TEST_WRO.pt",
     result_name: str = "results.pt",
 ):
 
@@ -726,9 +727,9 @@ def train_batch_VANO(
 
     u_bc = u_bc.repeat(S, 1, 1)  # [S, batch, 100]
 
-    D_z_norm = 0.5 * pred.pow(2)  # [S, batch]
+    D_z_norm = 0.5 * pred.pow(2)  # [S, batch, 100]
 
-    inner_prod = pred * u_bc  # [S, batch]
+    inner_prod = pred * u_bc  # [S, batch, 100]
 
     reconstr_loss = torch.mean(D_z_norm - inner_prod, dim=0).mean(0)  # [batch]
 
@@ -783,7 +784,7 @@ def validate_epoch_VANO(
             .float()
             .to(device)
             .unsqueeze(0)
-            .repeat(8, 1)
+            .repeat(32, 1)
         )  # [8, 11] zmienic na batch_size? czy po chuju?
         # normalize
         condition = normalizer_up.transform(
@@ -792,10 +793,217 @@ def validate_epoch_VANO(
 
         MFV, PI = None, None
         for i in range(10):
-            z = torch.randn(8, model.get_latent_dim()).to(device)
+            z = torch.randn(32, model.get_latent_dim()).to(device)
 
             synthetic = model.decode(z, condition)
-            synthetic = synthetic.reshape(8, 100, 1)  # (8, 100, 1)
+            synthetic = synthetic.reshape(32, 100, 1)  # (8, 100, 1)
+            # Need to denormalize and compute statistics
+            synthetic = normalizer_y.transform(synthetic, inverse=True)
+            if MFV is None:
+                MFV, PI = compute_statistics(synthetic)
+            else:
+                MFV_new, PI_new = compute_statistics(synthetic)
+                MFV = torch.cat((MFV, MFV_new), dim=0)
+                PI = torch.cat((PI, PI_new), dim=0)
+        MFV_mean, MFV_std = torch.mean(MFV, dim=0), torch.std(MFV, dim=0)
+        PI_mean, PI_std = torch.mean(PI, dim=0), torch.std(PI, dim=0)
+        tbl.add_data(
+            artery,
+            MFV_mean.item(),
+            MFV_std.item(),
+            PI_mean.item(),
+            PI_std.item(),
+            wandb.Image(plot_generated(synthetic)),
+        )
+    wandb.log({"Generated_distribution_statistics": tbl})
+
+    # policzyc reconstruction error
+
+def train_VAE(
+    model: nn.Module,
+    loss_func: nn.Module,
+    metric_func: nn.Module,
+    train_loader: MIODataLoader,
+    val_loader: MIODataLoader,
+    optimizer,
+    lr_scheduler,
+    epochs: int,
+    device: str,
+    grad_clip: float,
+    normalizer_y,
+    normalizer_up,
+    beta: float,
+    S: int = 4,
+    start_epoch: int = 0,
+    print_freq: int = 20,
+    model_save_path: str = "../../data/checkpoints/",
+    model_name: str = "VAE_TEST.pt",
+    result_name: str = "results.pt",
+):
+
+    it = 0
+    best_val_metric = np.inf
+
+    for epoch in range(epochs):
+        model.train()
+        torch.cuda.empty_cache()
+
+        for batch in train_loader:
+            loss, rec, kl = train_batch_VAE(
+                model=model,
+                loss_func=loss_func,
+                data=batch,
+                optimizer=optimizer,
+                lr_scheduler=lr_scheduler,
+                device=device,
+                grad_clip=grad_clip,
+                beta=beta,
+                S=S,
+            )
+            wandb.log(
+                {
+                    "Total_loss": loss,
+                    "Reconstruction_loss": rec,
+                    "KL_divergence": kl,
+                    "lr": optimizer.param_groups[0]["lr"],
+                }
+            )
+            loss = np.array(loss)
+            it += 1
+            log = f"epoch: [{epoch +1}/{epochs}]"
+            log += f"loss: {loss:.4f}"
+
+            if it % print_freq == 0:
+                print(log)
+
+            if loss.item() < best_val_metric:
+                best_val_metric = loss.item()
+                best_val_epoch = epoch
+                torch.save(
+                    model.state_dict(),
+                    os.path.join(model_save_path, model_name),
+                )
+        if epoch % 50 == 0:
+            validate_epoch_VAE(
+                model=model,
+                metric_func=metric_func,
+                valid_loader=val_loader,
+                device=device,
+                normalizer_y=normalizer_y,
+                normalizer_up=normalizer_up,
+            )
+
+    return None
+
+
+def train_batch_VAE(
+    model: nn.Module,
+    loss_func: nn.Module,
+    data: list,
+    optimizer,
+    lr_scheduler,
+    device: str,
+    beta: float,
+    grad_clip: float,
+    S: int = 4,
+):
+    # S = num of samples for monte carlo approx
+
+    optimizer.zero_grad()
+    u_bc, condition = data
+    u_bc = u_bc.ndata["y"].squeeze().reshape(condition.shape[0], -1)
+
+    u_bc, condition = u_bc.to(device), condition.to(device)
+    mean, log_var, z, pred = model(u_bc, condition)
+    # ELBO = E_p(eps)[log p(x | z=g(eps, x))] - KL(q(z | x) || p(z))
+    # ----------------------------------------------------------------
+    # Reconstruction loss: E_Q(z|x)[1/2 ||D(z)||^2_L2 - <D(z), u>^~]
+    # Sample S values of z
+    #  condition = [bs, 11]
+
+    eps = torch.randn(*z.shape, device=z.device)
+    z_samples = mean.unsqueeze(0) + torch.exp(log_var / 2).unsqueeze(0) * eps
+
+    z_samples = z_samples.view(-1, z_samples.shape[-1])  # [S * batch, latent_dim]
+    #condition = condition.repeat(S, 1, 1)  # [S , batch, 11]
+    condition = condition.view(-1, condition.shape[-1])  # [S * batch, 11]
+
+    pred = model.decode(z_samples, condition)  # need dim of condition itp
+
+    pred = pred.view(-1, pred.shape[-1])  # [S, batch, 100]
+
+    #u_bc = u_bc.repeat(S, 1, 1)  # [S, batch, 100]
+
+    #D_z_norm = 0.5 * pred.pow(2)  # [S, batch, 100]
+
+    #inner_prod = pred * u_bc  # [S, batch, 100]
+
+    reconstr_loss = 0.5 * torch.nn.MSELoss()(pred, u_bc.view(-1, u_bc.shape[-1])).sum(dim=-1) # [batch]
+
+    #reconstr_loss = torch.mean(reconstr_loss)
+
+    # KL divergence
+    kl_div = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp(), dim=-1)
+    #kl_div = torch.mean(kl_div)
+
+    loss = (reconstr_loss + kl_div).mean(dim=0)
+
+    loss.backward()
+    nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
+    optimizer.step()
+
+    if lr_scheduler:
+        lr_scheduler.step()
+
+    return (loss.item(), reconstr_loss.mean().item(), kl_div.mean().item())
+
+
+def validate_epoch_VAE(
+    model: nn.Module,
+    metric_func: nn.Module,
+    valid_loader: MIODataLoader,
+    device: str,
+    normalizer_y,
+    normalizer_up,
+):
+    model.eval()
+    arteries = [
+        "VA",
+        "ICA_1",
+        "BA",
+        "MCA",
+        "ACA_A1",
+        "ACA_A2",
+        "PCA_P1",
+        "PCA_P2",
+        "PCOA",
+        "ACOA",
+        "ICA_2",
+    ]
+    tbl = wandb.Table(
+        columns=["Artery", "MFV_mean", "MFV_std", "PI_mean", "PI_std", "Sample"]
+    )
+    for artery in arteries:
+        artery_one_hot = encode_artery(artery)
+        condition = (
+            torch.from_numpy(artery_one_hot)
+            .float()
+            .to(device)
+            .unsqueeze(0)
+            .repeat(32, 1)
+        )  # [8, 11] zmienic na batch_size? czy po chuju?
+        # normalize
+        condition = normalizer_up.transform(
+            condition, inverse=False
+        )  # nie bedziemy normalizowac one hot
+
+        MFV, PI = None, None
+        for i in range(10):
+            z = torch.randn(32, model.get_latent_dim()).to(device)
+
+            synthetic = model.decode(z, condition)
+            synthetic = synthetic.reshape(32, 100, 1)  # (8, 100, 1)
             # Need to denormalize and compute statistics
             synthetic = normalizer_y.transform(synthetic, inverse=True)
             if MFV is None:

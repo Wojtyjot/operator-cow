@@ -2,6 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import wandb
+import os
+from utils.GANO_utils import compute_statistics, get_min_max
+import pandas as pd
 
 # Functions for logging predicitions and ground truth
 # for vizualization in wandb plotting true vs predicted
@@ -166,3 +169,184 @@ def plot_AE(pred: torch.Tensor, target: torch.Tensor, type: str) -> plt:
         axs.set_title("velocity")
         axs.legend()
         return plt
+def unit_to_mmHg(p: np.ndarray) -> np.ndarray:
+    """
+    Function for converting pressure from units to mmHg
+    """
+    return 76 / 101325 * p
+
+def plot_pred_paper(
+    predictions: np.ndarray,
+    ground_truth: np.ndarray,
+    artery: str,
+    path: str,
+) -> None:
+    """
+    Function for creating plot for comparison preditions and ground truth
+    and logiing it into wandb
+
+    ground truth and predictions are in form:
+    withe entries: [
+        [p(x0, t0), A(x0, t0), u(x0, t0)],
+        [p(x0, t1), A(x0, t1), u(x0, t1)],
+        ...
+        [p(xn, t0), A(xn, t0), u(xn, t0)],
+        [p(xn, t1), A(xn, t1), u(xn, t1)],
+    ]
+    """
+    print("Plotting")
+    fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+    fig.suptitle(f"Predictions vs Ground truth for {artery}")
+    axs[0, 0].plot(unit_to_mmHg(predictions[:100, 0]), label="Predicted")
+    axs[0, 0].plot(unit_to_mmHg(ground_truth[:100, 0]), label="Ground truth")
+    axs[0, 0].set_title("Pressure")
+    axs[0,0].set_ylabel("mmHg")
+    axs[0, 0].set_xlabel("Time step")
+    axs[0, 0].legend()
+    #org_lim = axs[0, 0].get_ylim()
+    #print(org_lim)
+    axs[0, 0].grid()
+
+    axs[0,1].plot(predictions[:100, 1], label="Predicted")
+    axs[0,1].plot(ground_truth[:100, 1], label="Ground truth")
+    axs[0,1].set_title("Area")
+    axs[0,1].set_ylabel("cm^2")
+    axs[0,1].set_xlabel("Time step")
+    org_lim = axs[0, 1].get_ylim()
+    axs[0,1].set_ylim([org_lim[0]- org_lim[0]*0.10, org_lim[1]+ org_lim[1]*0.10])
+
+    axs[0,1].legend()
+    axs[0,1].grid()
+
+    axs[1,0].plot(predictions[:100, 2], label="Predicted")
+    axs[1,0].plot(ground_truth[:100, 2], label="Ground truth")
+    axs[1,0].set_title("Velocity")
+    axs[1,0].set_ylabel("cm/s")
+    axs[1,0].set_xlabel("Time step")
+    axs[1,0].legend()
+    axs[1,0].grid()
+
+    axs[1,1].plot(predictions[:100, 2] * predictions[:100, 1], label="Predicted")
+    axs[1,1].plot(ground_truth[:100, 2]* ground_truth[:100, 1], label="Ground truth")
+    axs[1,1].set_title("Flow")
+    axs[1,1].set_ylabel("cm^3/s")
+    axs[1,1].set_xlabel("Time step")
+    axs[1,1].legend()
+    
+    axs[1,1].grid()
+    plt.savefig(os.path.join(path, f"{artery}.png"))
+    plt.close()
+
+
+def create_plot_VANO_paper(
+    model: torch.nn.Module,
+    device: str,
+    normalizer_up: torch.nn.Module,
+    normalizer_y: torch.nn.Module,
+    path: str,
+    ):
+    model.eval()
+    arteries = [
+        "ICA_1",
+        "BA",
+        "MCA",
+        "ACA_A1",
+        "ACA_A2",
+        "PCA_P1",
+        "PCA_P2",
+        "PCOA",
+        "ACOA",
+        "ICA_2",
+    ]
+    fig, axs = plt.subplots(2, 5, figsize=(15, 6))
+    axs= axs.flatten()
+    for idx, artery in enumerate(arteries):
+        print(artery)
+        artery_one_hot = encode_artery(artery)
+        condition = (
+            torch.from_numpy(artery_one_hot)
+            .float()
+            .to(device)
+            .unsqueeze(0)
+            .repeat(512, 1)
+        )
+        condition = normalizer_up.transform(
+            condition, inverse=False
+        )
+        z = torch.randn(512, model.get_latent_dim()).to(device)
+        synthetic = model.decode(z, condition)
+        synthetic = synthetic.reshape(512, 100, 1)
+        synthetic = normalizer_y.transform(synthetic, inverse=True)
+        synthetic = synthetic.detach().cpu().numpy()
+        for i in range(synthetic.shape[0] - 1):
+            axs[idx].plot(synthetic[i, :, 0], color='gray', alpha=0.2, linewidth=1)
+        axs[idx].plot(synthetic[-1, :, 0], color='black', alpha=1, linewidth=1)
+        axs[idx].set_title(artery)
+        axs[idx].set_xlabel("Time step")
+        axs[idx].set_ylabel("cm/s")
+        axs[idx].grid()
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(path, "VANO_samples_paper.png"))
+
+
+def compute_statistics_VANO_paper(
+    model: torch.nn.Module,
+    device: str,
+    normalizer_up: torch.nn.Module,
+    normalizer_y: torch.nn.Module,
+    save_path: str,
+):
+    model.eval()
+    arteries = [
+        "ICA_1",
+        "BA",
+        "MCA",
+        "ACA_A1",
+        "ACA_A2",
+        "PCA_P1",
+        "PCA_P2",
+        "PCOA",
+        "ACOA",
+        "ICA_2",
+    ]
+    statistics = {}
+    for idx, artery in enumerate(arteries):
+        print(artery)
+        artery_one_hot = encode_artery(artery)
+        condition = (
+            torch.from_numpy(artery_one_hot)
+            .float()
+            .to(device)
+            .unsqueeze(0)
+            .repeat(512, 1)
+        )
+        condition = normalizer_up.transform(
+            condition, inverse=False
+        )
+        z = torch.randn(512, model.get_latent_dim()).to(device)
+        synthetic = model.decode(z, condition)
+        synthetic = synthetic.reshape(512, 100, 1)
+        synthetic = normalizer_y.transform(synthetic, inverse=True)
+        
+        _, _, min, max, min_std, max_std = get_min_max(synthetic) 
+        mfv, pi = compute_statistics(synthetic)
+        mfv = torch.mean(mfv)
+        mfv_std = torch.std(mfv)
+        pi = torch.mean(pi)
+        pi_std = torch.std(pi)
+        statistics[artery] = {
+            "min": min,
+            "max": max,
+            "min_std": min_std,
+            "max_std": max_std,
+            "mfv": mfv,
+            "mfv_std": mfv_std,
+            "pi": pi,
+            "pi_std": pi_std,
+        }
+    # save statistcs to csv file
+    df = pd.DataFrame(statistics)
+    df.to_csv(f"{save_path}/statistics_VANO.csv")
+
+    return statistics

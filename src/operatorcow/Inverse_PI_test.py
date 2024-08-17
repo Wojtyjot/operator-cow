@@ -32,7 +32,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="inverse_full")
+@hydra.main(version_base=None, config_path="configs", config_name="test_PI")
 def main(config: DictConfig) -> None:
 
     if config.log:
@@ -229,7 +229,7 @@ def main(config: DictConfig) -> None:
     for subfolder in val_path.iterdir():
         if subfolder.is_dir():
             arteries_log_save = get_arteries_dict()
-            fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI_NEW_VANO/" + str(
+            fig_path = "/home/wssk-ptw/Operator/COW_DATASET/PI_WYNIK/" + str(
                 subfolder.name
             )
             if not Path(fig_path).exists():
@@ -298,7 +298,7 @@ def main(config: DictConfig) -> None:
             # sys.exit()
             i += 1
 
-            #if i == 10:
+            # if i == 10:
             #    break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])

@@ -1,4 +1,4 @@
-seed: 2137
+seed: ${generate_random_seed:}
 
 data_dir: ${hydra:runtime.cwd}/data
 
@@ -26,8 +26,12 @@ wandb:
 data:
   data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/
   joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
-  batch_size: 18
+  path_train: /home/wssk-ptw/Operator/COW_DATASET/GNOT_train_new_BC_A_out.npy
+  path_test: /home/wssk-ptw/Operator/COW_DATASET/GNOT_test_new_BC_A_out.npy
+  batch_size: 1
 
+plots:
+  path: /home/wssk-ptw/Operator/COW_DATASET/PAPER_PLOTS/
 
 log: True 
 

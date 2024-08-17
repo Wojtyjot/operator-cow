@@ -64,7 +64,7 @@ model:
 inverse:
   lambda_mass: 10000.0
   lambda_pressure: 0.00000001
-  lambda_mes: 1000.0
+  lambda_mes: 10000.0
   lambda_a0: 1000.0
   max_iters: 3000
   eps: 0.000006

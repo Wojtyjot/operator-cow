@@ -60,3 +60,20 @@ def compute_statistics(velocity: torch.Tensor) -> Tuple[torch.Tensor, torch.Tens
     PI = (torch.max(velocity, dim=1)[0] - torch.min(velocity, dim=1)[0]) / MFV
 
     return MFV, PI
+
+def get_min_max(velocity: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Get min and max of generated samples
+    mean and std of min and max of generated samples
+    """
+    min = torch.min(velocity, dim=1)[0]
+    max = torch.max(velocity, dim=1)[0]
+    mean_min = torch.mean(min, dim=0)
+    mean_max = torch.mean(max, dim=0)
+    std_min = torch.std(min, dim=0)
+    std_max = torch.std(max, dim=0)
+    return min, max, mean_min, mean_max, std_min, std_max
+
+
+   
+    

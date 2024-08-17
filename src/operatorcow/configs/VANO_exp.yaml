@@ -22,27 +22,27 @@ wandb:
   anonymous: allow
   tags:
     - development
-
 data:
-  path: /data/path/placeholder
-  batch_size: 8
+  path_train: /home/wssk-ptw/Operator/COW_DATASET/GNOT_train_new_BC_A_out.npy
+  path_test: /home/wssk-ptw/Operator/COW_DATASET/GNOT_test_new_BC_A_out.npy
+  batch_size: 32
 
 model:
   name: VANO
-  layers_encoder: [111, 64, 32, 32]
-  layers_decoder: [27, 32, 64, 100]
-  model_save_path: placeholder
+  layers_encoder: [111, 256, 256, 256, 32]
+  layers_decoder: [27, 256, 256, 256, 100]
+  model_save_path: /home/wssk-ptw/Operator/COW_DATASET
   latent_dim: 16
 
 training:
   epochs: 500
   grad_clip: 1000.0
-  S: 4
+  S: 16
   beta: 0.001
 
 
 optimizer:
-  lr: 0.001
+  lr: 0.0001
   weight_decay: 0.00005
   beta1: 0.9
   beta2: 0.999
