@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
-from inverse.COW import COW
+from inverse.COW import COW, Multiple_COWs
 from inverse.Find_RCR import find_windkessel
 from log_plots import plot_predictions
 from models.ae import MLAE
@@ -32,83 +32,6 @@ logger = logging.getLogger(__name__)
 OmegaConf.register_new_resolver(
     "generate_random_seed", seeding.generate_random_seed, use_cache=True
 )
-
-
-def execute_cow_instance(
-    config,
-    model_surrogate,
-    normalizer_x,
-    normalizer_y,
-    normalizer_theta,
-    normalizer_u_bc,
-    VANO_model,
-    d_p,
-    device,
-):
-    cow = COW(
-        model_surrogate=model_surrogate,
-        AE_model=None,
-        normalizer_x=normalizer_x,
-        normalizer_y=normalizer_y,
-        normalizer_theta=normalizer_theta,
-        device=device,
-        joints_path=config.data.joints_path,
-        lr=config.inverse.lr,
-        track=config.log,
-        data_path=d_p,
-        normalizer_u_bc=normalizer_u_bc,
-        model_VANO=VANO_model,
-        VANO=True,
-    )
-
-    return cow.solve_accumulate_2(
-        max_iters=config.inverse.max_iters,
-        eps=config.inverse.eps,
-        batch_size=config.inverse.batch_size,
-        lambda_mes=config.inverse.lambda_mes,
-        lambda_mass=config.inverse.lambda_mass,
-        lambda_pressure=config.inverse.lambda_pressure,
-        lambda_a0=config.inverse.lambda_a0,
-    )
-
-
-def run_cow_n_times(
-    config,
-    model_surrogate,
-    normalizer_x,
-    normalizer_y,
-    normalizer_theta,
-    normalizer_u_bc,
-    VANO_model,
-    data_path,
-    n_times,
-    max_threads,
-):
-    device = torch.device("cuda:0")
-
-    with ThreadPoolExecutor(max_workers=max_threads) as executor:
-        futures = []
-        for _ in range(n_times / max_threads):
-            futures.append(
-                executor.submit(
-                    execute_cow_instance,
-                    config,
-                    model_surrogate,
-                    normalizer_x,
-                    normalizer_y,
-                    normalizer_theta,
-                    normalizer_u_bc,
-                    VANO_model,
-                    data_path,
-                    device,
-                )
-            )
-
-        results = []
-        for future in as_completed(futures):
-            results.append(future.result())
-
-    return results
 
 
 @hydra.main(version_base=None, config_path="configs", config_name="inverse_full")
@@ -316,19 +239,30 @@ def main(config: DictConfig) -> None:
 
             d_p = str(subfolder.resolve()) + "/"
 
-            results = run_cow_n_times(
-                config,
-                model_surrogate,
-                normalizer_x,
-                normalizer_y,
-                normalizer_theta,
-                normalizer_u_bc,
-                VANO_model,
-                d_p,
-                8,
-                4,
+            COWs = list(
+                COW(
+                    model_surrogate=model_surrogate,
+                    AE_model=None,
+                    normalizer_x=normalizer_x,
+                    normalizer_y=normalizer_y,
+                    normalizer_theta=normalizer_theta,
+                    device=device,
+                    joints_path=config.data.joints_path,
+                    lr=config.inverse.lr,
+                    track=config.log,
+                    data_path=d_p,
+                    normalizer_u_bc=normalizer_u_bc,
+                    model_VANO=VANO_model,
+                    VANO=True,
+                )
+                for _ in range(4)
             )
-            print(results)
+            M_COWs = Multiple_COWs(
+                COWs, normalizer_x, normalizer_theta, model_surrogate
+            )
+
+            M_COWs.solve_cows()
+
             sys.exit()
             cow = COW(
                 model_surrogate=model_surrogate,

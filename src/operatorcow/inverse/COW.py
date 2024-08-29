@@ -2106,3 +2106,197 @@ class COW(object):
                 "R_PCA_P2",
             ]:
                 artery.mesurement = False  # moze jakis setter zrobic
+
+
+class Multiple_COWs(object):
+    """
+    Super class for executing multiple instances of COW in parralel
+
+    Changes include computing solve arteries for multiple instances in one pass
+
+    changes include bathcing from all arteries in all instances
+    """
+
+    def __init__(
+        self, COWs: List[COW], normalizer_x, normalizer_theta, model_surrogate
+    ):
+        self.COWs = COWs
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.normalizer_x = normalizer_x
+        self.normalizer_theta = normalizer_theta
+        self.model_surrogate = model_surrogate
+
+    def initialize_losses(self):
+        self.losses = list(0 for i in range(len(self.COWs)))
+        self.validation = list()
+
+    def loader(self, batch_size: int):
+        """
+        Loader for multiple cows, batch size represents number of cows sampled
+
+        batch_size = len(COWs)???
+        """
+
+        batch_idx = [list(range(18)) for i in range(batch_size)]
+        transposed = zip(
+            *[
+                self.COWs[idx_cow].get_arteries(idx_a)
+                for idx_cow, idx_a in enumerate(batch_idx)
+            ]
+        )
+        batched = []
+        for sample in transposed:
+            if isinstance(sample[0], dgl.DGLGraph):
+                batched.append(dgl.batch(list(sample)))
+            elif isinstance(sample[0], torch.Tensor):
+                batched.append(torch.stack(sample))
+            elif isinstance(sample[0], MultipleTensors):
+                sample_ = MultipleTensors(
+                    [
+                        pad_sequence(
+                            [sample[i][j] for i in range(len(sample))]
+                        ).permute(1, 0, 2)
+                        for j in range(len(sample[0]))
+                    ]
+                )
+                batched.append(sample_)
+            else:
+                raise NotImplementedError
+        yield batched, batch_idx
+
+    def solve_cows(self):
+        for batch, idx in self.loader(len(self.COWs)):
+            g, u_p, g_u = batch  # znormalizowac trzeba to
+
+            g, u_p, g_u = (
+                g.to(self.device),
+                u_p.to(self.device),
+                g_u.to(self.device),
+            )
+
+            g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
+            u_p = self.normalizer_theta.transform(u_p, inverse=False)
+
+            # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
+
+            out = self.model_surrogate(
+                g, u_p, g_u
+            )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
+            out = self.normalizer_y.transform(out, inverse=True)
+            out = out.reshape(len(self.COWs), 18, -1, 3)  # mam nadzieje ze to dobrze
+
+            # tu musi byc funkcja do zapisu wynikow do artery
+            # print(idx)
+            for idx_cow, idx_artery in enumerate(idx):
+                self.COWs[idx_cow].update_arteries(out[idx_cow].squeeze(), idx_artery)
+
+            return out, idx
+
+    def solve_inverse(
+        self,
+        max_iters: int,
+        eps: float,
+        batch_size: int,
+        lambda_mes: float,
+        lambda_mass: float,
+        lambda_pressure: float,
+        lambda_a0: float,
+        run_id=0,
+    ):
+        """
+        Optimization loop for multile cows
+        """
+        it = 0
+        for i in range(max_iters):
+            _, _ = self.solve_cows()
+            self.initialize_losses()
+            for idx_cow in len(self.COWs):
+                if self.COWs[idx_cow].optimizer_full is not None:
+                    self.COWs[idx_cow].optimizer_full.zero_grad()
+                if self.COWs[idx_cow].optimizer_non_mes is not None:
+                    self.COWs[idx_cow].optimizer_non_mes.zero_grad()
+                if self.COWs[idx_cow].optimizer_mes is not None:
+                    self.COWs[idx_cow].optimizer_mes.zero_grad()
+                if self.COWs[idx_cow].optimizer_RT is not None:
+                    self.COWs[idx_cow].optimizer_RT.zero_grad()
+
+                if it < 2:
+                    self.losses[idx_cow] += (
+                        lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()
+                    )
+                    loss_mass, loss_pressure = self.COWs[
+                        idx_cow
+                    ].compute_bifurcation_loss()
+                    self.losses[idx_cow] += loss_mass + loss_pressure
+                    loss_a0 = self.COWs[idx_cow].compute_a0_loss()
+                    self.losses[idx_cow] += loss_a0
+                    self.losses[idx_cow].backward()
+                    self.COWs[idx_cow].optimizer_RT.step()
+                    # print(f"RT = {self.RT}")
+                    # print(f"CT = {self.CT}")
+
+                elif it < 1000 and it >= 2:
+                    if self.COWs[idx_cow].optimizer_mes is None:
+                        self.COWs[idx_cow].create_optimizer(self.lr, "MES")
+                    self.losses[idx_cow] += (
+                        lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()
+                    )
+                    loss_mass, loss_pressure = self.COWs[
+                        idx_cow
+                    ].compute_bifurcation_loss()
+                    self.losses[idx_cow] += 1e-20 * (loss_mass + loss_pressure)
+                    loss_a0 = self.COWs[idx_cow].compute_a0_loss()
+                    self.losses[idx_cow] += lambda_a0 * loss_a0
+                    self.losses[idx_cow].backward()
+                    self.COWs[idx_cow].optimizer_mes.step()
+
+                elif it <= 2000 and it >= 1000:
+                    if self.COWs[idx_cow].optimizer_non_mes is None:
+                        self.COWs[idx_cow].create_optimizer(self.lr, "NON_MES")
+                    loss_mass, loss_pressure = self.COWs[
+                        idx_cow
+                    ].compute_bifurcation_loss()
+
+                    # loss += lambda_bif * (1000 * loss_mass + loss_pressure / 1e5)
+                    self.losses[idx_cow] += lambda_mass * loss_mass
+                    self.losses[idx_cow] += lambda_pressure * loss_pressure
+                    loss_a0 = self.COWs[idx_cow].compute_a0_loss()
+                    self.losses[idx_cow] += lambda_a0 * loss_a0
+                    self.losses[idx_cow].backward()
+                    self.COWs[idx_cow].optimizer_non_mes.step()
+
+                else:
+                    if self.COWs[idx_cow].optimizer_full is None:
+                        self.COWs[idx_cow].create_optimizer(self.lr, "FULL")
+                    self.losses[idx_cow] += (
+                        lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()
+                    )
+                    loss_mass, loss_pressure = self.COWs[
+                        idx_cow
+                    ].compute_bifurcation_loss()
+
+                    # loss += lambda_bif * (1000 * loss_mass +   loss_pressure / 1e5)
+                    self.losses[idx_cow] += lambda_mass * loss_mass
+                    self.losses[idx_cow] += lambda_pressure * loss_pressure
+                    loss_a0 = self.COWs[idx_cow].compute_a0_loss()
+                    self.losses[idx_cow] += lambda_a0 * loss_a0
+
+                    try:
+                        self.losses[idx_cow].backward()
+                        self.COWs[idx_cow].optimizer_full.step()
+                    except:
+                        pass
+                if it % 10 == 0:
+                    print(f"Loss = {self.losses[idx_cow]}")
+
+                self.COWs[idx_cow].propagate_RT()
+                self.COWs[idx_cow].update_CT()
+                self.COWs[idx_cow].propagate_CT()
+                it += 1
+
+        for idx_cow in len(self.COWs):
+            self.validation.append(self.COWs[idx_cow].compute_validation_l2_loss(18))
+
+        for idx_cow in len(self.COWs):
+            print(f"Validation loss for cow {idx_cow} = {self.validation[idx_cow]}")
+            print(f"Loss for cow {idx_cow} = {self.losses[idx_cow]}")
