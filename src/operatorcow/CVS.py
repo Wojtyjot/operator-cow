@@ -229,12 +229,12 @@ def main(config: DictConfig) -> None:
     cvs_path = config.data.cvs_path
 
     L2s = []
-    #i = 0
+    # i = 0
 
     arteries_log_save = get_arteries_dict()
-    #get 10 runs for cvs and compute losses
+    # get 10 runs for cvs and compute losses
     for i in range(10):
-        
+
         fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_{i}/" + "NO_CVS"
         p_ref_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{i}/p_ref/"
         r0s_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{i}/r0s/"
@@ -244,7 +244,7 @@ def main(config: DictConfig) -> None:
             Path(p_ref_path).mkdir(parents=True, exist_ok=True)
         if not Path(r0s_path).exists():
             Path(r0s_path).mkdir(parents=True, exist_ok=True)
-        if True :
+        if True:
             cow = COW(
                 model_surrogate=model_surrogate,
                 AE_model=None,
@@ -354,7 +354,7 @@ def main(config: DictConfig) -> None:
                 r0s_path=r0s_path + "r0s.npy",
                 p_ref_path=p_ref_path,
             )
-            #sys.exit()
+            # sys.exit()
 
             L2, loss = cow.solve_cvs(
                 max_iters=config.inverse.max_iters,

@@ -5,7 +5,13 @@ import hydra
 import torch
 import torch.nn as nn
 import wandb
-from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss, COWDataset_GANO
+from data_utils import COWDataset, COWDataset_GANO, MIODataLoader, WeightedLpRelLoss
+from log_plots import (
+    compute_statistics_VANO_paper,
+    create_plot_VANO_paper,
+    decode_artery,
+    plot_pred_paper,
+)
 from models.cgpt import CGPT
 from models.mmgpt import GNOT
 from models.optimizer import AdamW
@@ -14,7 +20,6 @@ from omegaconf import DictConfig, OmegaConf
 from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
-from log_plots import plot_pred_paper, decode_artery, create_plot_VANO_paper, compute_statistics_VANO_paper
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +43,8 @@ def main(config: DictConfig) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load the data
-    #dataset_train = COWDataset(config.data.path_train)
-    #dataset_test = COWDataset(config.data.path_test)
+    # dataset_train = COWDataset(config.data.path_train)
+    # dataset_test = COWDataset(config.data.path_test)
     dataset_train = COWDataset_GANO(config.data.path_train)
     dataset_test = COWDataset_GANO(config.data.path_test)
 
@@ -107,7 +112,6 @@ def main(config: DictConfig) -> None:
     else:
         raise ValueError(f"Model {config.model.name} not recognized.")
 
-    
     loss_func = WeightedLpRelLoss(
         p=2,
         component="all",
@@ -126,7 +130,7 @@ def main(config: DictConfig) -> None:
     )
     VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
 
-    #model.load_state_dict(torch.load(config.model.surrogate_weights_path))
+    # model.load_state_dict(torch.load(config.model.surrogate_weights_path))
     VANO_model.to(device)
     VANO_model.eval()
     if VANO:
@@ -150,7 +154,7 @@ def main(config: DictConfig) -> None:
         model.to(device)
         ploted_vessels = []
         arteries = [
-            #"VA",
+            # "VA",
             "ICA_1",
             "BA",
             "MCA",
@@ -169,13 +173,14 @@ def main(config: DictConfig) -> None:
             with torch.no_grad():
                 g, u_p, g_u = data
                 g, g_u, u_p = g.to(device), g_u.to(device), u_p.to(device)
-                #import time
+                # import time
                 import sys
-                #st = time.time()
+
+                # st = time.time()
                 out = model(g, u_p, g_u)
-                #print(time.time()-st)
-                
-                #sys.exit()
+                # print(time.time()-st)
+
+                # sys.exit()
                 out = normalizer.transform(out, inverse=True)
                 y = normalizer.transform(g.ndata["y"], inverse=True)
 
@@ -185,16 +190,21 @@ def main(config: DictConfig) -> None:
                     artery = decode_artery(u_p[0][:11].cpu().numpy())  # tu nie 11?
 
                     if artery not in ploted_vessels:
-                        plot_pred_paper(y_pred.cpu().numpy(), y.cpu().numpy(), artery, config.plots.path)
+                        plot_pred_paper(
+                            y_pred.cpu().numpy(),
+                            y.cpu().numpy(),
+                            artery,
+                            config.plots.path,
+                        )
                         ploted_vessels.append(artery)
                 else:
                     sys.exit()
-                error_pressure,_,_ = loss_func(g, y_pred[:,0], y[:,0])
-                error_area,_,_ = loss_func(g, y_pred[:,1], y[:,1])
-                error_velocity,_,_ = loss_func(g, y_pred[:,2], y[:,2])
-                results['pressure'][artery].append(error_pressure)
-                results['area'][artery].append(error_area)
-                results['velocity'][artery].append(error_velocity)
+                error_pressure, _, _ = loss_func(g, y_pred[:, 0], y[:, 0])
+                error_area, _, _ = loss_func(g, y_pred[:, 1], y[:, 1])
+                error_velocity, _, _ = loss_func(g, y_pred[:, 2], y[:, 2])
+                results["pressure"][artery].append(error_pressure)
+                results["area"][artery].append(error_area)
+                results["velocity"][artery].append(error_velocity)
 
         # calculate mean error for each artery and variable
         for var in vars:
@@ -202,11 +212,10 @@ def main(config: DictConfig) -> None:
                 results[var][artery] = torch.mean(torch.stack(results[var][artery]))
         # save results in csv file
         for var in vars:
-            with open(f'{config.plots.path}/{var}_errors.csv', 'w') as f:
-                f.write('artery,error\n')
+            with open(f"{config.plots.path}/{var}_errors.csv", "w") as f:
+                f.write("artery,error\n")
                 for artery in arteries:
-                    f.write(f'{artery},{results[var][artery]}\n')
-
+                    f.write(f"{artery},{results[var][artery]}\n")
 
 
 if __name__ == "__main__":

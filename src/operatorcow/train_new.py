@@ -5,6 +5,7 @@ import sys
 import dgl
 import numpy as np
 import torch
+import torch.functional as F
 import torch.nn as nn
 import wandb
 from data_utils import COWDataset, MIODataLoader, calculate_gradient_penalty
@@ -20,7 +21,6 @@ from models.optimizer import Adam
 from torch.optim.lr_scheduler import OneCycleLR
 from utils.GANO_utils import compute_statistics
 from utils.utils import MultipleTensors, get_num_params
-import torch.functional as F
 
 
 def train(
@@ -819,6 +819,7 @@ def validate_epoch_VANO(
 
     # policzyc reconstruction error
 
+
 def train_VAE(
     model: nn.Module,
     loss_func: nn.Module,
@@ -925,26 +926,28 @@ def train_batch_VAE(
     z_samples = mean.unsqueeze(0) + torch.exp(log_var / 2).unsqueeze(0) * eps
 
     z_samples = z_samples.view(-1, z_samples.shape[-1])  # [S * batch, latent_dim]
-    #condition = condition.repeat(S, 1, 1)  # [S , batch, 11]
+    # condition = condition.repeat(S, 1, 1)  # [S , batch, 11]
     condition = condition.view(-1, condition.shape[-1])  # [S * batch, 11]
 
     pred = model.decode(z_samples, condition)  # need dim of condition itp
 
     pred = pred.view(-1, pred.shape[-1])  # [S, batch, 100]
 
-    #u_bc = u_bc.repeat(S, 1, 1)  # [S, batch, 100]
+    # u_bc = u_bc.repeat(S, 1, 1)  # [S, batch, 100]
 
-    #D_z_norm = 0.5 * pred.pow(2)  # [S, batch, 100]
+    # D_z_norm = 0.5 * pred.pow(2)  # [S, batch, 100]
 
-    #inner_prod = pred * u_bc  # [S, batch, 100]
+    # inner_prod = pred * u_bc  # [S, batch, 100]
 
-    reconstr_loss = 0.5 * torch.nn.MSELoss()(pred, u_bc.view(-1, u_bc.shape[-1])).sum(dim=-1) # [batch]
+    reconstr_loss = 0.5 * torch.nn.MSELoss()(pred, u_bc.view(-1, u_bc.shape[-1])).sum(
+        dim=-1
+    )  # [batch]
 
-    #reconstr_loss = torch.mean(reconstr_loss)
+    # reconstr_loss = torch.mean(reconstr_loss)
 
     # KL divergence
     kl_div = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp(), dim=-1)
-    #kl_div = torch.mean(kl_div)
+    # kl_div = torch.mean(kl_div)
 
     loss = (reconstr_loss + kl_div).mean(dim=0)
 

@@ -515,7 +515,7 @@ class Artery(object):
 
     def get_p_pred(self):
         return self.p_pred
-    
+
     def get_u_bc_rec(self):
         return self.u_bc_rec
 
@@ -1296,8 +1296,8 @@ class COW(object):
                 )
         else:
             for artery in self.arteries:
-                #print(artery.get_p_ref().shape)
-                #print(artery.get_p_pred().shape)
+                # print(artery.get_p_ref().shape)
+                # print(artery.get_p_pred().shape)
                 loss += nn.MSELoss()(artery.get_p_ref(), artery.get_p_pred())
         return loss
 
@@ -1405,10 +1405,10 @@ class COW(object):
             return loss
         else:
             for artery in self.arteries:
-                #print("REC")
-                #print(artery.get_a0_rec().shape)
-                #print("TRUE")
-                #print(artery.get_a0().shape)
+                # print("REC")
+                # print(artery.get_a0_rec().shape)
+                # print("TRUE")
+                # print(artery.get_a0().shape)
                 loss += nn.MSELoss()(artery.get_a0_rec(), artery.get_a0())
             return loss
 
@@ -1421,7 +1421,7 @@ class COW(object):
         lambda_mass: float,
         lambda_pressure: float,
         lambda_a0: float,
-        run_id = 0,
+        run_id=0,
     ):
         """
         Solving inverse proble one joint at a time and accumulating
@@ -1497,7 +1497,7 @@ class COW(object):
                     pass
             if it % 10 == 0:
                 pass
-                #print(f"Loss = {loss}")
+                # print(f"Loss = {loss}")
 
             self.propagate_RT()
             self.update_CT()
@@ -1511,13 +1511,15 @@ class COW(object):
         # self.log_validation()
 
         # iter += 1
-        if True:
+        if False:
             out, idx = self.solve_arteries(batch_size)
-            self.save_ref_pressure(f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{run_id}/p_ref/", out, idx=idx)  # TODO ADD MANUALY
+            self.save_ref_pressure(
+                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{run_id}/p_ref/", out, idx=idx
+            )  # TODO ADD MANUALY
             self.dump_r0s(f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{run_id}/r0s/")
             return validation_loss, loss
         else:
-            return validation_loss
+            return validation_loss, loss
 
     def solve_cvs(
         self,
@@ -1569,12 +1571,12 @@ class COW(object):
                 loss_mass, loss_pressure = self.compute_bifurcation_loss()
                 loss += 1e-20 * (loss_mass + loss_pressure)
                 loss_a0 = self.compute_a0_loss()
-                #loss += lambda_a0 * loss_a0
+                # loss += lambda_a0 * loss_a0
                 loss_p_ref = self.compute_pressure_loss()
                 loss += lambda_p_ref * loss_p_ref
                 loss.backward(retain_graph=True)
                 self.optimizer_mes.step()
-                #print("step")
+                # print("step")
 
             elif it <= 2000 and it >= 1000:
                 if self.optimizer_non_mes is None:
@@ -1585,7 +1587,7 @@ class COW(object):
                 loss += lambda_mass * loss_mass
                 loss += lambda_pressure * loss_pressure
                 loss_a0 = self.compute_a0_loss()
-                #loss += lambda_a0 * loss_a0
+                # loss += lambda_a0 * loss_a0
                 loss_p_ref = self.compute_pressure_loss()
                 loss += lambda_p_ref * loss_p_ref
                 loss.backward(retain_graph=True)
@@ -1601,7 +1603,7 @@ class COW(object):
                 loss += lambda_mass * loss_mass
                 loss += lambda_pressure * loss_pressure
                 loss_a0 = self.compute_a0_loss()
-                #loss += lambda_a0 * loss_a0
+                # loss += lambda_a0 * loss_a0
                 loss_p_ref = self.compute_pressure_loss()
                 loss += lambda_p_ref * loss_p_ref
 
@@ -1760,7 +1762,7 @@ class COW(object):
             axs[0, 1].set_ylabel("cm^2")
             axs[0, 1].set_xlabel("time_step")
             y_lim = axs[0, 1].get_ylim()
-            axs[0, 1].set_ylim(y_lim[0] - 0.10*y_lim[0], y_lim[1] + 0.10*y_lim[1])
+            axs[0, 1].set_ylim(y_lim[0] - 0.10 * y_lim[0], y_lim[1] + 0.10 * y_lim[1])
             axs[0, 1].legend()
             axs[0, 1].grid()
             axs[1, 0].plot(p_in, label="Predicted")
@@ -1952,8 +1954,6 @@ class COW(object):
             fig.suptitle(artery.name)
             plt.savefig(os.path.join(path, f"{artery.name}_u_bc.png"))
             plt.close()
-        
-
 
     def get_num_arteries(self):
         """
