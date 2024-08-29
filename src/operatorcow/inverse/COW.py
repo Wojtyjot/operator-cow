@@ -1421,6 +1421,7 @@ class COW(object):
         lambda_mass: float,
         lambda_pressure: float,
         lambda_a0: float,
+        run_id = 0,
     ):
         """
         Solving inverse proble one joint at a time and accumulating
@@ -1495,7 +1496,8 @@ class COW(object):
                 except:
                     pass
             if it % 10 == 0:
-                print(f"Loss = {loss}")
+                pass
+                #print(f"Loss = {loss}")
 
             self.propagate_RT()
             self.update_CT()
@@ -1509,11 +1511,13 @@ class COW(object):
         # self.log_validation()
 
         # iter += 1
-        if False:
+        if True:
             out, idx = self.solve_arteries(batch_size)
-            self.save_ref_pressure("/home/wssk-ptw/Operator/COW_DATASET/CVS/p_ref/", out, idx=idx)  # TODO ADD MANUALY
-            self.dump_r0s("/home/wssk-ptw/Operator/COW_DATASET/CVS/r0s/")
-        return validation_loss
+            self.save_ref_pressure(f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{run_id}/p_ref/", out, idx=idx)  # TODO ADD MANUALY
+            self.dump_r0s(f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{run_id}/r0s/")
+            return validation_loss, loss
+        else:
+            return validation_loss
 
     def solve_cvs(
         self,
@@ -1621,7 +1625,7 @@ class COW(object):
 
         # iter += 1
 
-        return validation_loss
+        return validation_loss, loss
 
     def log_validation(self):
         tbl = wandb.Table(
@@ -1755,6 +1759,8 @@ class COW(object):
             axs[0, 1].set_title("Area")
             axs[0, 1].set_ylabel("cm^2")
             axs[0, 1].set_xlabel("time_step")
+            y_lim = axs[0, 1].get_ylim()
+            axs[0, 1].set_ylim(y_lim[0] - 0.10*y_lim[0], y_lim[1] + 0.10*y_lim[1])
             axs[0, 1].legend()
             axs[0, 1].grid()
             axs[1, 0].plot(p_in, label="Predicted")

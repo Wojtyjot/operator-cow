@@ -53,7 +53,7 @@ model:
   horiz_fourier_dim: 0
   AE_weights_path: /data/path/placeholder
   surrogate_weights_path: /home/wssk-ptw/Operator/Model_archive/GNOT_FINAL.pt
-  VANO_weights_path: /home/wssk-ptw/Operator/Model_archive/VANO_FINAL.pt
+  VANO_weights_path: /home/wssk-ptw/Operator/Model_archive/VANO_FINAL_500.pt
   ae:
     layers: [100, 128, 256, 128, 32]
   VANO:
