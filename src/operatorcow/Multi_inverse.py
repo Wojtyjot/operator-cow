@@ -256,7 +256,7 @@ def main(config: DictConfig) -> None:
                         model_VANO=VANO_model,
                         VANO=True,
                     )
-                    for _ in range(2)
+                    for _ in range(10)
                 )
                 M_COWs = Multiple_COWs(
                     COWs, normalizer_x, normalizer_y, normalizer_theta, model_surrogate, config.inverse.lr
@@ -266,7 +266,7 @@ def main(config: DictConfig) -> None:
                 M_COWs.solve_inverse(
                     max_iters=config.inverse.max_iters,
                     eps=config.inverse.eps,
-                    batch_size=config.inverse.batch_size,
+                    batch_size=2,
                     lambda_mes=config.inverse.lambda_mes,
                     lambda_mass=config.inverse.lambda_mass,
                     lambda_pressure=config.inverse.lambda_pressure,
