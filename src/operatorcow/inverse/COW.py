@@ -23,7 +23,6 @@ from inverse.ROM.utils import (
 from log_plots import plot_predictions
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
-import gc
 
 ## Wszystko musi byc na same device
 # artery musi zwracać wszystkie dane potrzebne do obliczen
@@ -2168,8 +2167,11 @@ class Multiple_COWs(object):
         ]
         for indices in cow_idx:
             transposed = zip(
-                *[self.COWs[idx_cow].get_arteries(idx_a) for idx_cow in indices for idx_a in a_idx]
-            
+                *[
+                    self.COWs[idx_cow].get_arteries(idx_a)
+                    for idx_cow in indices
+                    for idx_a in a_idx
+                ]
             )
             batched = []
             for sample in transposed:
@@ -2191,7 +2193,7 @@ class Multiple_COWs(object):
                     raise NotImplementedError
             yield batched, indices
 
-    def solve_cows(self, batch = None, idx = None):
+    def solve_cows(self, batch=None, idx=None):
         batch_size = 2
         if batch is None:
             for batch, idx in self.loader(batch_size=batch_size):
@@ -2269,9 +2271,9 @@ class Multiple_COWs(object):
         for i in range(int(max_iters / 5)):
             for batch, idx in self.loader(batch_size):
                 _, _ = self.solve_cows(batch, idx)
-                
+
                 for idx_cow in idx:
-                    #print(f"Optimizing COW {idx_cow}")
+                    # print(f"Optimizing COW {idx_cow}")
                     self.losses[idx_cow] = 0
                     if self.COWs[idx_cow].optimizer_full is not None:
                         self.COWs[idx_cow].optimizer_full.zero_grad()
@@ -2297,7 +2299,9 @@ class Multiple_COWs(object):
                                 retain_graph=True, inputs=self.COWs[idx_cow].p_RT
                             )
                         else:
-                            self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_RT)
+                            self.losses[idx_cow].backward(
+                                inputs=self.COWs[idx_cow].p_RT
+                            )
                         # self.losses[idx_cow].backward( retain_graph= True if idx_cow != len(self.COWs), inputs=self.COWs[idx_cow].RT)
                         self.COWs[idx_cow].optimizer_RT.step()
                         # print(f"RT = {self.RT}")
@@ -2320,7 +2324,9 @@ class Multiple_COWs(object):
                                 retain_graph=True, inputs=self.COWs[idx_cow].p_MES
                             )
                         else:
-                            self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_MES)
+                            self.losses[idx_cow].backward(
+                                inputs=self.COWs[idx_cow].p_MES
+                            )
                         # self.losses[idx_cow].backward(retain_graph=True)
                         self.COWs[idx_cow].optimizer_mes.step()
 
@@ -2377,13 +2383,14 @@ class Multiple_COWs(object):
                         except:
                             pass
                     if it % 10 == 0:
-                        print(f"COW_IDX = {idx_cow} Loss = {self.losses[idx_cow]}")
+                        # print(f"COW_IDX = {idx_cow} Loss = {self.losses[idx_cow]}")
+                        pass
 
                     self.COWs[idx_cow].propagate_RT()
                     self.COWs[idx_cow].update_CT()
                     self.COWs[idx_cow].propagate_CT()
-                    #torch.cuda.empty_cache()
-                    #gc.collect()
+                    # torch.cuda.empty_cache()
+                    # gc.collect()
             it += 1
 
         for idx_cow in range(len(self.COWs)):
@@ -2392,3 +2399,52 @@ class Multiple_COWs(object):
         for idx_cow in range(len(self.COWs)):
             print(f"Validation loss for cow {idx_cow} = {self.validation[idx_cow]}")
             print(f"Loss for cow {idx_cow} = {self.losses[idx_cow]}")
+
+        self.best_idx = np.argmin(self.losses)
+
+    def get_L2(self):
+        return self.validation[self.best_idx]
+
+    def dump_plots(self, path: str, best: bool = True):
+        if best:
+            self.COWs[self.best_idx].dump_plots(path)
+        else:
+            for idx, cow in enumerate(self.COWs):
+                cow.dump_plots(path + f"/COW_{idx}")
+
+    def dump_params(self, path: str, best: bool = True):
+        if best:
+            self.COWs[self.best_idx].dump_params(path)
+        else:
+            for idx, cow in enumerate(self.COWs):
+                cow.dump_params(path + f"/COW_{idx}")
+
+    def dump_statistics(self, path: str, best: bool = True):
+        if best:
+            self.COWs[self.best_idx].dump_statistics(path)
+        else:
+            for idx, cow in enumerate(self.COWs):
+                cow.dump_statistics(path + f"/COW_{idx}")
+
+    def dump_validation(self, path: str, best: bool = True):
+        if best:
+            self.COWs[self.best_idx].dump_validation(path)
+        else:
+            for idx, cow in enumerate(self.COWs):
+                cow.dump_validation(path + f"/COW_{idx}")
+
+    def dump_reconstructed_u_bc_plots(self, path: str, best: bool = True):
+        if best:
+            self.COWs[self.best_idx].dump_reconstructed_u_bc_plots(path)
+        else:
+            for idx, cow in enumerate(self.COWs):
+                cow.dump_reconstructed_u_bc_plots(path + f"/COW_{idx}")
+
+    def get_validation(self, arteries_log: dict, best: bool = True):
+        if best:
+            return self.COWs[self.best_idx].get_validation(arteries_log)
+        else:
+            raise NotImplementedError
+            for idx, cow in enumerate(self.COWs):
+                cow.get_validation(arteries_log)
+        return arteries_log

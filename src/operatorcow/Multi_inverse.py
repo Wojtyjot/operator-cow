@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -24,7 +25,6 @@ from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
-import time
 
 # from operatorcow.inverse.inverse import optimize_input_test
 
@@ -232,113 +232,69 @@ def main(config: DictConfig) -> None:
     for subfolder in val_path.iterdir():
         if subfolder.is_dir():
             arteries_log_save = get_arteries_dict()
-            fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI_NEW_VANO/" + str(
+            fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI_10_RUNS/" + str(
                 subfolder.name
             )
             if not Path(fig_path).exists():
                 Path(fig_path).mkdir(parents=True, exist_ok=True)
 
             d_p = str(subfolder.resolve()) + "/"
-            for i in range(5):
-                COWs = list(
-                    COW(
-                        model_surrogate=model_surrogate,
-                        AE_model=None,
-                        normalizer_x=normalizer_x,
-                        normalizer_y=normalizer_y,
-                        normalizer_theta=normalizer_theta,
-                        device=device,
-                        joints_path=config.data.joints_path,
-                        lr=config.inverse.lr,
-                        track=config.log,
-                        data_path=d_p,
-                        normalizer_u_bc=normalizer_u_bc,
-                        model_VANO=VANO_model,
-                        VANO=True,
-                    )
-                    for _ in range(10)
-                )
-                M_COWs = Multiple_COWs(
-                    COWs, normalizer_x, normalizer_y, normalizer_theta, model_surrogate, config.inverse.lr
-                )
-                
-                st = time.time()
-                M_COWs.solve_inverse(
-                    max_iters=config.inverse.max_iters,
-                    eps=config.inverse.eps,
-                    batch_size=2,
-                    lambda_mes=config.inverse.lambda_mes,
-                    lambda_mass=config.inverse.lambda_mass,
-                    lambda_pressure=config.inverse.lambda_pressure,
-                    lambda_a0=config.inverse.lambda_a0,
-                )
-                print(f"Time: {time.time() - st}")
 
-            sys.exit()
-            cow = COW(
-                model_surrogate=model_surrogate,
-                AE_model=None,
-                normalizer_x=normalizer_x,
-                normalizer_y=normalizer_y,
-                normalizer_theta=normalizer_theta,
-                device=device,
-                joints_path=config.data.joints_path,
-                lr=config.inverse.lr,
-                track=config.log,
-                data_path=d_p,
-                normalizer_u_bc=normalizer_u_bc,
-                model_VANO=VANO_model,
-                VANO=True,
+            COWs = list(
+                COW(
+                    model_surrogate=model_surrogate,
+                    AE_model=None,
+                    normalizer_x=normalizer_x,
+                    normalizer_y=normalizer_y,
+                    normalizer_theta=normalizer_theta,
+                    device=device,
+                    joints_path=config.data.joints_path,
+                    lr=config.inverse.lr,
+                    track=config.log,
+                    data_path=d_p,
+                    normalizer_u_bc=normalizer_u_bc,
+                    model_VANO=VANO_model,
+                    VANO=True,
+                )
+                for _ in range(10)
+            )
+            M_COWs = Multiple_COWs(
+                COWs,
+                normalizer_x,
+                normalizer_y,
+                normalizer_theta,
+                model_surrogate,
+                config.inverse.lr,
             )
 
-            L2 = cow.solve_accumulate_2(
+            st = time.time()
+            M_COWs.solve_inverse(
                 max_iters=config.inverse.max_iters,
                 eps=config.inverse.eps,
-                batch_size=config.inverse.batch_size,
+                batch_size=2,
                 lambda_mes=config.inverse.lambda_mes,
                 lambda_mass=config.inverse.lambda_mass,
                 lambda_pressure=config.inverse.lambda_pressure,
                 lambda_a0=config.inverse.lambda_a0,
             )
-            # estimate windkessel and perform simulation etc.
-            # R2, C, Z = find_windkessel(
-            #    cow, 5
-            # )  # need to check for opimal num_simulations
-            # 5 in paper ML in cardiovascular flows
-            # TODO zmodyfikować csv BY były dobre jointy
-
-            # cow.ROM_simulation(config.inverse.path_to_csv, 1,1, 1)
-            # cow.set_ROM_mesurement()
-            # another loop of training with new "mesurements"
-
-            # L2 = cow.solve_accumulate_2(
-            #    max_iters=config.inverse.max_iters,
-            #    eps=config.inverse.eps,
-            #    batch_size=config.inverse.batch_size,
-            #    lambda_reg=config.inverse.lambda_reg,
-            #    lambda_bif=config.inverse.lambda_bif,
-            #    lambda_sv=config.inverse.lambda_sv,
-            #    lambda_mes=config.inverse.lambda_mes,
-            #    log_every=config.inverse.log_every,
-            # )
-
-            arteries_log = cow.get_validation(arteries_log)
-            arteries_log_save = cow.get_validation(arteries_log_save)
+            print(f"Time: {time.time() - st}")
+            arteries_log = M_COWs.get_validation(arteries_log)
+            arteries_log_save = M_COWs.get_validation(arteries_log_save)
+            L2 = M_COWs.get_L2()
             L2s.append(L2)
-            cow.dump_plots(fig_path)
-            cow.dump_params(fig_path)
-            cow.dump_statistics(fig_path)
-            cow.dump_validation(fig_path, arteries_log_save)
-            cow.dump_reconstructed_u_bc_plots(fig_path)
-            # cow.dump_ROM_plots(fig_path)
+            M_COWs.dump_plots(fig_path)
+            M_COWs.dump_params(fig_path)
+            M_COWs.dump_statistics(fig_path)
+            M_COWs.dump_validation(fig_path, arteries_log_save)
+            M_COWs.dump_reconstructed_u_bc_plots(fig_path)
 
             print(f"Validation data: {subfolder}")
             print(L2)
             # sys.exit()
             i += 1
 
-            # if i == 10:
-            #    break
+            if i == 1:
+                break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
     L2s = np.array(L2s)
