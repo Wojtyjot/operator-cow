@@ -2141,10 +2141,19 @@ class Multiple_COWs(object):
         self.model_surrogate = model_surrogate
         self.normalizer_y = normalizer_y
         self.lr = lr
+        self.set_g()
 
     def initialize_losses(self):
         self.losses = list(0 for i in range(len(self.COWs)))
         self.validation = list()
+    
+    def set_g(self):
+        for batch, idx in self.loader(2):
+            g, u_p, g_u = batch
+            g = g.to(self.device)
+            g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
+            self.g = g
+            break
 
     def loader(self, batch_size: int):
         """
@@ -2227,19 +2236,19 @@ class Multiple_COWs(object):
         else:
             g, u_p, g_u = batch  # znormalizowac trzeba to
 
-            g, u_p, g_u = (
-                g.to(self.device),
+            u_p, g_u = (
+                
                 u_p.to(self.device),
                 g_u.to(self.device),
             )
 
-            g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
+            
             u_p = self.normalizer_theta.transform(u_p, inverse=False)
 
             # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
 
             out = self.model_surrogate(
-                g, u_p, g_u
+                self.g, u_p, g_u
             )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
             out = self.normalizer_y.transform(out, inverse=True)
             out = out.reshape(batch_size, 18, -1, 3)  # mam nadzieje ze to dobrze
@@ -2395,6 +2404,7 @@ class Multiple_COWs(object):
 
         for idx_cow in range(len(self.COWs)):
             self.validation.append(self.COWs[idx_cow].compute_validation_l2_loss(18))
+            self.losses[idx_cow] = self.losses[idx_cow].item()
 
         for idx_cow in range(len(self.COWs)):
             print(f"Validation loss for cow {idx_cow} = {self.validation[idx_cow]}")
@@ -2426,9 +2436,9 @@ class Multiple_COWs(object):
             for idx, cow in enumerate(self.COWs):
                 cow.dump_statistics(path + f"/COW_{idx}")
 
-    def dump_validation(self, path: str, best: bool = True):
+    def dump_validation(self, path: str, arteries ,best: bool = True):
         if best:
-            self.COWs[self.best_idx].dump_validation(path)
+            self.COWs[self.best_idx].dump_validation(path, arteries)
         else:
             for idx, cow in enumerate(self.COWs):
                 cow.dump_validation(path + f"/COW_{idx}")

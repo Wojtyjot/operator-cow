@@ -293,8 +293,8 @@ def main(config: DictConfig) -> None:
             # sys.exit()
             i += 1
 
-            if i == 1:
-                break
+            #if i == 1:
+            #    break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
     L2s = np.array(L2s)
