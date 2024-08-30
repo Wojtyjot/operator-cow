@@ -2126,7 +2126,13 @@ class Multiple_COWs(object):
     """
 
     def __init__(
-        self, COWs: List[COW], normalizer_x, normalizer_y, normalizer_theta, model_surrogate, lr
+        self,
+        COWs: List[COW],
+        normalizer_x,
+        normalizer_y,
+        normalizer_theta,
+        model_surrogate,
+        lr,
     ):
         self.COWs = COWs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -2147,35 +2153,45 @@ class Multiple_COWs(object):
         batch_size = len(COWs)???
         """
 
-        batch_idx = [list(range(18)) for i in range(batch_size)]
-        transposed = zip(
-            *[
-                self.COWs[idx_cow].get_arteries(idx_a)
-                for idx_cow, idx_al in enumerate(batch_idx) for idx_a in idx_al
+        # batch_idx = [list(range(18)) for i in range(batch_size)]
+        # transposed = zip(
+        #    *[
+        #        self.COWs[idx_cow].get_arteries(idx_a)
+        #        for idx_cow, idx_al in enumerate(batch_idx) for idx_a in idx_al
+        #    ]
+        # )
+        a_idx = list(range(18))
+        cow_idx = [
+            list(range(i, min(i + batch_size), len(self.COWs)))
+            for i in range(0, len(self.COWs), batch_size)
+        ]
+        for indices in cow_idx:
+            transposed = [
+                *[self.COWs[idx_cow].get_arteries(a_idx) for idx_cow in indices]
             ]
-        )
-        batched = []
-        for sample in transposed:
-            if isinstance(sample[0], dgl.DGLGraph):
-                batched.append(dgl.batch(list(sample)))
-            elif isinstance(sample[0], torch.Tensor):
-                batched.append(torch.stack(sample))
-            elif isinstance(sample[0], MultipleTensors):
-                sample_ = MultipleTensors(
-                    [
-                        pad_sequence(
-                            [sample[i][j] for i in range(len(sample))]
-                        ).permute(1, 0, 2)
-                        for j in range(len(sample[0]))
-                    ]
-                )
-                batched.append(sample_)
-            else:
-                raise NotImplementedError
-        yield batched, batch_idx
+            batched = []
+            for sample in transposed:
+                if isinstance(sample[0], dgl.DGLGraph):
+                    batched.append(dgl.batch(list(sample)))
+                elif isinstance(sample[0], torch.Tensor):
+                    batched.append(torch.stack(sample))
+                elif isinstance(sample[0], MultipleTensors):
+                    sample_ = MultipleTensors(
+                        [
+                            pad_sequence(
+                                [sample[i][j] for i in range(len(sample))]
+                            ).permute(1, 0, 2)
+                            for j in range(len(sample[0]))
+                        ]
+                    )
+                    batched.append(sample_)
+                else:
+                    raise NotImplementedError
+            yield batched, indices
 
     def solve_cows(self):
-        for batch, idx in self.loader(len(self.COWs)):
+        batch_size = 2
+        for batch, idx in self.loader(batch_size=batch_size):
             g, u_p, g_u = batch  # znormalizowac trzeba to
 
             g, u_p, g_u = (
@@ -2193,14 +2209,16 @@ class Multiple_COWs(object):
                 g, u_p, g_u
             )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
             out = self.normalizer_y.transform(out, inverse=True)
-            out = out.reshape(len(self.COWs), 18, -1, 3)  # mam nadzieje ze to dobrze
+            out = out.reshape(batch_size, 18, -1, 3)  # mam nadzieje ze to dobrze
 
             # tu musi byc funkcja do zapisu wynikow do artery
             # print(idx)
-            for idx_cow, idx_artery in enumerate(idx):
-                self.COWs[idx_cow].update_arteries(out[idx_cow].squeeze(), idx_artery)
+            for idx_cow in idx:
+                self.COWs[idx_cow].update_arteries(
+                    out[idx_cow].squeeze(), list(range(18))
+                )
 
-            return out, idx
+        return out, idx
 
     def solve_inverse(
         self,
@@ -2217,7 +2235,7 @@ class Multiple_COWs(object):
         Optimization loop for multile cows
         """
         it = 0
-        for i in range(int(max_iters/5)):
+        for i in range(int(max_iters / 5)):
             _, _ = self.solve_cows()
             self.initialize_losses()
             for idx_cow in range(len(self.COWs)):
@@ -2229,7 +2247,7 @@ class Multiple_COWs(object):
                     self.COWs[idx_cow].optimizer_mes.zero_grad()
                 if self.COWs[idx_cow].optimizer_RT is not None:
                     self.COWs[idx_cow].optimizer_RT.zero_grad()
-                
+
                 if it < 2:
                     self.losses[idx_cow] += (
                         lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()
@@ -2241,15 +2259,17 @@ class Multiple_COWs(object):
                     loss_a0 = self.COWs[idx_cow].compute_a0_loss()
                     self.losses[idx_cow] += loss_a0
                     if idx_cow != len(self.COWs):
-                        self.losses[idx_cow].backward( retain_graph= True, inputs=self.COWs[idx_cow].p_RT)
+                        self.losses[idx_cow].backward(
+                            retain_graph=True, inputs=self.COWs[idx_cow].p_RT
+                        )
                     else:
                         self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_RT)
-                    #self.losses[idx_cow].backward( retain_graph= True if idx_cow != len(self.COWs), inputs=self.COWs[idx_cow].RT)
+                    # self.losses[idx_cow].backward( retain_graph= True if idx_cow != len(self.COWs), inputs=self.COWs[idx_cow].RT)
                     self.COWs[idx_cow].optimizer_RT.step()
                     # print(f"RT = {self.RT}")
                     # print(f"CT = {self.CT}")
 
-                elif it < 1000/5 and it >= 2:
+                elif it < 1000 / 5 and it >= 2:
                     if self.COWs[idx_cow].optimizer_mes is None:
                         self.COWs[idx_cow].create_optimizer(self.lr, "MES")
                     self.losses[idx_cow] += (
@@ -2262,13 +2282,15 @@ class Multiple_COWs(object):
                     loss_a0 = self.COWs[idx_cow].compute_a0_loss()
                     self.losses[idx_cow] += lambda_a0 * loss_a0
                     if idx_cow != len(self.COWs):
-                        self.losses[idx_cow].backward(retain_graph=True, inputs=self.COWs[idx_cow].p_MES) 
+                        self.losses[idx_cow].backward(
+                            retain_graph=True, inputs=self.COWs[idx_cow].p_MES
+                        )
                     else:
                         self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_MES)
-                    #self.losses[idx_cow].backward(retain_graph=True)
+                    # self.losses[idx_cow].backward(retain_graph=True)
                     self.COWs[idx_cow].optimizer_mes.step()
 
-                elif it <= 2000/5 and it >= 1000/5:
+                elif it <= 2000 / 5 and it >= 1000 / 5:
                     if self.COWs[idx_cow].optimizer_non_mes is None:
                         self.COWs[idx_cow].create_optimizer(self.lr, "NON_MES")
                     loss_mass, loss_pressure = self.COWs[
@@ -2281,10 +2303,14 @@ class Multiple_COWs(object):
                     loss_a0 = self.COWs[idx_cow].compute_a0_loss()
                     self.losses[idx_cow] += lambda_a0 * loss_a0
                     if idx_cow != len(self.COWs):
-                        self.losses[idx_cow].backward(retain_graph=True, inputs=self.COWs[idx_cow].p_NON_MES)
+                        self.losses[idx_cow].backward(
+                            retain_graph=True, inputs=self.COWs[idx_cow].p_NON_MES
+                        )
                     else:
-                        self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_NON_MES)
-                    #self.losses[idx_cow].backward(retain_graph=True)
+                        self.losses[idx_cow].backward(
+                            inputs=self.COWs[idx_cow].p_NON_MES
+                        )
+                    # self.losses[idx_cow].backward(retain_graph=True)
                     self.COWs[idx_cow].optimizer_non_mes.step()
 
                 else:
@@ -2305,10 +2331,14 @@ class Multiple_COWs(object):
 
                     try:
                         if idx_cow != len(self.COWs):
-                            self.losses[idx_cow].backward(retain_graph=True, inputs=self.COWs[idx_cow].p_FULL)
+                            self.losses[idx_cow].backward(
+                                retain_graph=True, inputs=self.COWs[idx_cow].p_FULL
+                            )
                         else:
-                            self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_FULL)
-                        #self.losses[idx_cow].backward(retain_graph=True)
+                            self.losses[idx_cow].backward(
+                                inputs=self.COWs[idx_cow].p_FULL
+                            )
+                        # self.losses[idx_cow].backward(retain_graph=True)
                         self.COWs[idx_cow].optimizer_full.step()
                     except:
                         pass
