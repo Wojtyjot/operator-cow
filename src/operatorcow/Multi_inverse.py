@@ -24,6 +24,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
+import time
 
 # from operatorcow.inverse.inverse import optimize_input_test
 
@@ -238,30 +239,40 @@ def main(config: DictConfig) -> None:
                 Path(fig_path).mkdir(parents=True, exist_ok=True)
 
             d_p = str(subfolder.resolve()) + "/"
-
-            COWs = list(
-                COW(
-                    model_surrogate=model_surrogate,
-                    AE_model=None,
-                    normalizer_x=normalizer_x,
-                    normalizer_y=normalizer_y,
-                    normalizer_theta=normalizer_theta,
-                    device=device,
-                    joints_path=config.data.joints_path,
-                    lr=config.inverse.lr,
-                    track=config.log,
-                    data_path=d_p,
-                    normalizer_u_bc=normalizer_u_bc,
-                    model_VANO=VANO_model,
-                    VANO=True,
+            for i in range(5):
+                COWs = list(
+                    COW(
+                        model_surrogate=model_surrogate,
+                        AE_model=None,
+                        normalizer_x=normalizer_x,
+                        normalizer_y=normalizer_y,
+                        normalizer_theta=normalizer_theta,
+                        device=device,
+                        joints_path=config.data.joints_path,
+                        lr=config.inverse.lr,
+                        track=config.log,
+                        data_path=d_p,
+                        normalizer_u_bc=normalizer_u_bc,
+                        model_VANO=VANO_model,
+                        VANO=True,
+                    )
+                    for _ in range(2)
                 )
-                for _ in range(4)
-            )
-            M_COWs = Multiple_COWs(
-                COWs, normalizer_x, normalizer_theta, model_surrogate
-            )
-
-            M_COWs.solve_cows()
+                M_COWs = Multiple_COWs(
+                    COWs, normalizer_x, normalizer_y, normalizer_theta, model_surrogate, config.inverse.lr
+                )
+                
+                st = time.time()
+                M_COWs.solve_inverse(
+                    max_iters=config.inverse.max_iters,
+                    eps=config.inverse.eps,
+                    batch_size=config.inverse.batch_size,
+                    lambda_mes=config.inverse.lambda_mes,
+                    lambda_mass=config.inverse.lambda_mass,
+                    lambda_pressure=config.inverse.lambda_pressure,
+                    lambda_a0=config.inverse.lambda_a0,
+                )
+                print(f"Time: {time.time() - st}")
 
             sys.exit()
             cow = COW(

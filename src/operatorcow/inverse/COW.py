@@ -894,6 +894,7 @@ class COW(object):
             if optim == "RT":
                 p = [self.RT.requires_grad_(True)]
                 self.optimizer_RT = torch.optim.Adam(p, lr=lr)
+                self.p_RT = p
 
             elif optim == "MES":
                 p = []
@@ -906,6 +907,7 @@ class COW(object):
                     [self.r0s.requires_grad_(True)]
                 )  # muszą być dodatnie może torch.exp(r0s)?
                 self.optimizer_mes = torch.optim.Adam(p, lr=lr)
+                self.p_MES = p
 
             elif optim == "NON_MES":
                 p = []
@@ -918,6 +920,7 @@ class COW(object):
                 p.extend([self.RT.requires_grad_(True)])
                 p.extend([self.r0s.requires_grad_(True)])
                 self.optimizer_non_mes = torch.optim.Adam(p, lr=lr)
+                self.p_NON_MES = p
 
             elif optim == "FULL":
                 p = []
@@ -927,12 +930,14 @@ class COW(object):
                 p.extend([self.RT.requires_grad_(True)])
                 p.extend([self.r0s.requires_grad_(True)])
                 self.optimizer_full = torch.optim.Adam(p, lr=lr)
+                self.p_FULL = p
 
         else:
 
             if optim == "RT":
                 p = [self.RT.requires_grad_(True)]
                 self.optimizer_RT = torch.optim.Adam(p, lr=lr)
+                self.p_RT = p
 
             elif optim == "MES":
                 p = []
@@ -942,6 +947,7 @@ class COW(object):
                         p.extend(artery.get_parameters())
                 p.extend([self.RT.requires_grad_(True)])
                 self.optimizer_mes = torch.optim.Adam(p, lr=lr)
+                self.p_MES = p
 
             elif optim == "NON_MES":
                 p = []
@@ -953,6 +959,7 @@ class COW(object):
                         p.extend(artery.get_parameters())
                 p.extend([self.RT.requires_grad_(True)])
                 self.optimizer_non_mes = torch.optim.Adam(p, lr=lr)
+                self.p_NON_MES = p
 
             elif optim == "FULL":
                 p = []
@@ -961,6 +968,7 @@ class COW(object):
                         p.extend(artery.get_parameters())
                 p.extend([self.RT.requires_grad_(True)])
                 self.optimizer_full = torch.optim.Adam(p, lr=lr)
+                self.p_FULL = p
 
     def loader_GNOT(self, batch_size, batch_idx=None):
         # Loader dla gnota req loss mozna w jednym batchu?
@@ -2118,13 +2126,15 @@ class Multiple_COWs(object):
     """
 
     def __init__(
-        self, COWs: List[COW], normalizer_x, normalizer_theta, model_surrogate
+        self, COWs: List[COW], normalizer_x, normalizer_y, normalizer_theta, model_surrogate, lr
     ):
         self.COWs = COWs
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.normalizer_x = normalizer_x
         self.normalizer_theta = normalizer_theta
         self.model_surrogate = model_surrogate
+        self.normalizer_y = normalizer_y
+        self.lr = lr
 
     def initialize_losses(self):
         self.losses = list(0 for i in range(len(self.COWs)))
@@ -2141,7 +2151,7 @@ class Multiple_COWs(object):
         transposed = zip(
             *[
                 self.COWs[idx_cow].get_arteries(idx_a)
-                for idx_cow, idx_a in enumerate(batch_idx)
+                for idx_cow, idx_al in enumerate(batch_idx) for idx_a in idx_al
             ]
         )
         batched = []
@@ -2207,10 +2217,10 @@ class Multiple_COWs(object):
         Optimization loop for multile cows
         """
         it = 0
-        for i in range(max_iters):
+        for i in range(int(max_iters/5)):
             _, _ = self.solve_cows()
             self.initialize_losses()
-            for idx_cow in len(self.COWs):
+            for idx_cow in range(len(self.COWs)):
                 if self.COWs[idx_cow].optimizer_full is not None:
                     self.COWs[idx_cow].optimizer_full.zero_grad()
                 if self.COWs[idx_cow].optimizer_non_mes is not None:
@@ -2219,7 +2229,7 @@ class Multiple_COWs(object):
                     self.COWs[idx_cow].optimizer_mes.zero_grad()
                 if self.COWs[idx_cow].optimizer_RT is not None:
                     self.COWs[idx_cow].optimizer_RT.zero_grad()
-
+                
                 if it < 2:
                     self.losses[idx_cow] += (
                         lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()
@@ -2230,12 +2240,16 @@ class Multiple_COWs(object):
                     self.losses[idx_cow] += loss_mass + loss_pressure
                     loss_a0 = self.COWs[idx_cow].compute_a0_loss()
                     self.losses[idx_cow] += loss_a0
-                    self.losses[idx_cow].backward()
+                    if idx_cow != len(self.COWs):
+                        self.losses[idx_cow].backward( retain_graph= True, inputs=self.COWs[idx_cow].p_RT)
+                    else:
+                        self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_RT)
+                    #self.losses[idx_cow].backward( retain_graph= True if idx_cow != len(self.COWs), inputs=self.COWs[idx_cow].RT)
                     self.COWs[idx_cow].optimizer_RT.step()
                     # print(f"RT = {self.RT}")
                     # print(f"CT = {self.CT}")
 
-                elif it < 1000 and it >= 2:
+                elif it < 1000/5 and it >= 2:
                     if self.COWs[idx_cow].optimizer_mes is None:
                         self.COWs[idx_cow].create_optimizer(self.lr, "MES")
                     self.losses[idx_cow] += (
@@ -2247,10 +2261,14 @@ class Multiple_COWs(object):
                     self.losses[idx_cow] += 1e-20 * (loss_mass + loss_pressure)
                     loss_a0 = self.COWs[idx_cow].compute_a0_loss()
                     self.losses[idx_cow] += lambda_a0 * loss_a0
-                    self.losses[idx_cow].backward()
+                    if idx_cow != len(self.COWs):
+                        self.losses[idx_cow].backward(retain_graph=True, inputs=self.COWs[idx_cow].p_MES) 
+                    else:
+                        self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_MES)
+                    #self.losses[idx_cow].backward(retain_graph=True)
                     self.COWs[idx_cow].optimizer_mes.step()
 
-                elif it <= 2000 and it >= 1000:
+                elif it <= 2000/5 and it >= 1000/5:
                     if self.COWs[idx_cow].optimizer_non_mes is None:
                         self.COWs[idx_cow].create_optimizer(self.lr, "NON_MES")
                     loss_mass, loss_pressure = self.COWs[
@@ -2262,7 +2280,11 @@ class Multiple_COWs(object):
                     self.losses[idx_cow] += lambda_pressure * loss_pressure
                     loss_a0 = self.COWs[idx_cow].compute_a0_loss()
                     self.losses[idx_cow] += lambda_a0 * loss_a0
-                    self.losses[idx_cow].backward()
+                    if idx_cow != len(self.COWs):
+                        self.losses[idx_cow].backward(retain_graph=True, inputs=self.COWs[idx_cow].p_NON_MES)
+                    else:
+                        self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_NON_MES)
+                    #self.losses[idx_cow].backward(retain_graph=True)
                     self.COWs[idx_cow].optimizer_non_mes.step()
 
                 else:
@@ -2282,21 +2304,25 @@ class Multiple_COWs(object):
                     self.losses[idx_cow] += lambda_a0 * loss_a0
 
                     try:
-                        self.losses[idx_cow].backward()
+                        if idx_cow != len(self.COWs):
+                            self.losses[idx_cow].backward(retain_graph=True, inputs=self.COWs[idx_cow].p_FULL)
+                        else:
+                            self.losses[idx_cow].backward(inputs=self.COWs[idx_cow].p_FULL)
+                        #self.losses[idx_cow].backward(retain_graph=True)
                         self.COWs[idx_cow].optimizer_full.step()
                     except:
                         pass
                 if it % 10 == 0:
-                    print(f"Loss = {self.losses[idx_cow]}")
+                    print(f"COW_IDX = {idx_cow} Loss = {self.losses[idx_cow]}")
 
                 self.COWs[idx_cow].propagate_RT()
                 self.COWs[idx_cow].update_CT()
                 self.COWs[idx_cow].propagate_CT()
-                it += 1
+            it += 1
 
-        for idx_cow in len(self.COWs):
+        for idx_cow in range(len(self.COWs)):
             self.validation.append(self.COWs[idx_cow].compute_validation_l2_loss(18))
 
-        for idx_cow in len(self.COWs):
+        for idx_cow in range(len(self.COWs)):
             print(f"Validation loss for cow {idx_cow} = {self.validation[idx_cow]}")
             print(f"Loss for cow {idx_cow} = {self.losses[idx_cow]}")
