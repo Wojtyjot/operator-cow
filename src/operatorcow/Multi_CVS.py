@@ -274,7 +274,7 @@ def main(config: DictConfig) -> None:
         M_COWs.solve_inverse(
             max_iters=config.inverse.max_iters,
             eps=config.inverse.eps,
-            batch_size=config.inverse.batch_size,
+            batch_size=2,
             lambda_mes=config.inverse.lambda_mes,
             lambda_mass=config.inverse.lambda_mass,
             lambda_pressure=config.inverse.lambda_pressure,
@@ -292,8 +292,8 @@ def main(config: DictConfig) -> None:
         M_COWs.dump_validation(fig_path, arteries_log_save)
         M_COWs.dump_reconstructed_u_bc_plots(fig_path)
 
-        print(f"Validation data: {subfolder}")
-        print(L2)
+        #print(f"Validation data: {subfolder}")
+        #print(L2)
         # sys.exit()
 
         # if i == 10:
@@ -378,7 +378,7 @@ def main(config: DictConfig) -> None:
         M_COWs.solve_cvs(
             max_iters=config.inverse.max_iters,
             eps=config.inverse.eps,
-            batch_size=config.inverse.batch_size,
+            batch_size=2,
             lambda_mes=config.inverse.lambda_mes,
             lambda_mass=config.inverse.lambda_mass,
             lambda_pressure=config.inverse.lambda_pressure,

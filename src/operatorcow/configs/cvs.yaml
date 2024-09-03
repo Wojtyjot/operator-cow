@@ -69,7 +69,7 @@ inverse:
   max_iters: 3000
   eps: 0.000006
   batch_size: 18
-  lr: 0.01
+  lr: 1
   log_every: 100
   lambda_p_ref: 0.1
   path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
