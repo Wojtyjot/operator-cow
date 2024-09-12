@@ -12,6 +12,16 @@ from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
 
 
+class WaveAct(nn.Module):
+    def __init__(self):
+        super(WaveAct, self).__init__()
+        self.w1 = nn.Parameter(torch.ones(1), requires_grad=True)
+        self.w2 = nn.Parameter(torch.ones(1), requires_grad=True)
+
+    def forward(self, x):
+        return self.w1 * torch.sin(x) + self.w2 * torch.cos(x)
+
+
 class MoEGPTConfig:
     """base GPT config, params common to all GPT versions"""
 
@@ -227,6 +237,8 @@ class MIOECrossAttentionBlock(nn.Module):
             self.act = ReLU
         elif config.act == "sigmoid":
             self.act = Sigmoid
+        elif config.act == "wave":
+            self.act = WaveAct
 
         self.resid_drop1 = nn.Dropout(config.resid_pdrop)
         self.resid_drop2 = nn.Dropout(config.resid_pdrop)

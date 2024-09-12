@@ -38,7 +38,7 @@ def train(
     start_epoch: int = 0,
     print_freq: int = 20,
     model_save_path: str = "/home/wssk-ptw/Operator/operator-cow/data/checkpoints",
-    model_name: str = "GNOT_FINAL_BIG.pt",
+    model_name: str = "GNOT_FINAL_Wave.pt",
     result_name: str = "results.pt",
 ):
     loss_train = []

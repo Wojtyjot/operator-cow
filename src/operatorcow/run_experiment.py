@@ -21,7 +21,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="test_exp")
+@hydra.main(version_base=None, config_path="configs", config_name="test_exp_wave")
 def main(config: DictConfig) -> None:
 
     wandb.init(
