@@ -32,7 +32,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="cvs")
+@hydra.main(version_base=None, config_path="configs", config_name="cvs_mca")
 def main(config: DictConfig) -> None:
 
     if config.log:
@@ -234,9 +234,9 @@ def main(config: DictConfig) -> None:
     arteries_log_save = get_arteries_dict()
     # get 10 runs for cvs and compute losses
 
-    fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_{0}/" + "NO_CVS"
-    p_ref_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{0}/p_ref/"
-    r0s_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{0}/r0s/"
+    fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_MCA_{0}/" + "NO_CVS"
+    p_ref_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MCA_{0}/p_ref/"
+    r0s_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MCA_{0}/r0s/"
     if not Path(fig_path).exists():
         Path(fig_path).mkdir(parents=True, exist_ok=True)
     if not Path(p_ref_path).exists():
@@ -336,10 +336,10 @@ def main(config: DictConfig) -> None:
                 )
             wandb.log({"Arteries": tbl_arteries})
 
-    for subfolder in ["CVS_0.6", "CVS_0.5", "CVS_0.4"]:
+    for subfolder in ["CVS_0.9", "CVS_0.7", "CVS_0.5"]:
         arteries_log = get_arteries_dict()
         arteries_log_save = get_arteries_dict()
-        fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_{0}/" + str(
+        fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_MCA_{0}/" + str(
             subfolder
         )
         if not Path(fig_path).exists():
@@ -357,7 +357,7 @@ def main(config: DictConfig) -> None:
                 joints_path=config.data.joints_path,
                 lr=config.inverse.lr,
                 track=config.log,
-                data_path=path_15386,
+                data_path=d_p,
                 normalizer_u_bc=normalizer_u_bc,
                 model_VANO=VANO_model,
                 VANO=True,
@@ -403,7 +403,7 @@ def main(config: DictConfig) -> None:
             tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
             L2s = np.array(L2s)
             tbl_l2.add_data(L2s.mean(), L2s.std())
-            wandb.log({f"L2_{subfolder}": tbl_l2})
+            wandb.log({"L2": tbl_l2})
 
             tbl_arteries = wandb.Table(
                 columns=[
@@ -435,7 +435,7 @@ def main(config: DictConfig) -> None:
                     arteries_log[artery]["Pressure"].mean(),
                     arteries_log[artery]["Pressure"].std(),
                 )
-            wandb.log({f"Arteries_{subfolder}": tbl_arteries})
+            wandb.log({f"Arteries{subfolder}": tbl_arteries})
 
     return L2s.mean()
 

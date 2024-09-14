@@ -2414,10 +2414,10 @@ class Multiple_COWs(object):
         if dump_p_ref:
             out, idx = self.COWs[self.best_idx].solve_arteries(18)
             self.COWs[self.best_idx].save_ref_pressure(
-                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{run_id}/p_ref/", out, idx=idx
+                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MCA_{run_id}/p_ref/", out, idx=idx
             )
             self.COWs[self.best_idx].dump_r0s(
-                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_{run_id}/r0s/"
+                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MCA_{run_id}/r0s/"
             )
 
     def solve_cvs(
