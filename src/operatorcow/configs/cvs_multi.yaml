@@ -24,15 +24,15 @@ wandb:
     - development
 
 data:
-  path_15386: /home/wssk-ptw/Operator/COW_DATASET/CVS_MCA/ref/ # path is to 11537!
+  path_15386: /home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI/ref/ # path is to 11537!
   joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
-  r0s_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MCA/r0s/r0s.npy
-  p_ref_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MCA/p_ref/
-  cvs_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MCA/
+  r0s_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI/r0s/r0s.npy
+  p_ref_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI/p_ref/
+  cvs_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI/
   batch_size: 18
 
 
-log: True
+log: False
 
 model:
   name: GNOT
@@ -73,5 +73,4 @@ inverse:
   log_every: 100
   lambda_p_ref: 0.01
   path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
-
 

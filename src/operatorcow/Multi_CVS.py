@@ -32,7 +32,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="cvs_mca")
+@hydra.main(version_base=None, config_path="configs", config_name="cvs_multi")
 def main(config: DictConfig) -> None:
 
     if config.log:
@@ -234,9 +234,9 @@ def main(config: DictConfig) -> None:
     arteries_log_save = get_arteries_dict()
     # get 10 runs for cvs and compute losses
 
-    fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_MCA_{0}/" + "NO_CVS"
-    p_ref_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MCA_{0}/p_ref/"
-    r0s_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MCA_{0}/r0s/"
+    fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_MULTI_{0}/" + "NO_CVS"
+    p_ref_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_{0}/p_ref/"
+    r0s_path = f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_{0}/r0s/"
     if not Path(fig_path).exists():
         Path(fig_path).mkdir(parents=True, exist_ok=True)
     if not Path(p_ref_path).exists():
@@ -336,10 +336,10 @@ def main(config: DictConfig) -> None:
                 )
             wandb.log({"Arteries": tbl_arteries})
 
-    for subfolder in ["CVS_0.9", "CVS_0.7", "CVS_0.5"]:
+    for subfolder in ["CVS_0.9", "CVS_0.8","CVS_0.7", "CVS_0.6", "CVS_0.5", "CVS_0.4"]:
         arteries_log = get_arteries_dict()
         arteries_log_save = get_arteries_dict()
-        fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_MCA_{0}/" + str(
+        fig_path = f"/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/CVS_MULTI_{0}/" + str(
             subfolder
         )
         if not Path(fig_path).exists():
