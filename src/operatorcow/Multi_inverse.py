@@ -35,7 +35,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="inverse_full")
+@hydra.main(version_base=None, config_path="configs", config_name="Inverse_full_new_hyper")
 def main(config: DictConfig) -> None:
 
     if config.log:

@@ -1,4 +1,4 @@
-seed: ${generate_random_seed:}
+seed: 2137
 
 data_dir: ${hydra:runtime.cwd}/data
 
@@ -24,11 +24,8 @@ wandb:
     - development
 
 data:
-  path_15386: /home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_3955/ref/ # path is to 11537!
+  data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/
   joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
-  r0s_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_3955/r0s/r0s.npy
-  p_ref_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_3955/p_ref/
-  cvs_path: /home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_3955/
   batch_size: 18
 
 
@@ -71,6 +68,6 @@ inverse:
   batch_size: 18
   lr: 1
   log_every: 100
-  lambda_p_ref: 0.01
   path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
+
 

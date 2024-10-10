@@ -2325,11 +2325,11 @@ class Multiple_COWs(object):
                         loss_mass, loss_pressure = self.COWs[
                             idx_cow
                         ].compute_bifurcation_loss()
-                        print(f"loss_mass = {loss_mass}")
-                        print(f"loss_pressure = {loss_pressure}")
+                        print(f"loss_mass = {lambda_mass *loss_mass}")
+                        print(f"loss_pressure = {lambda_pressure * loss_pressure}")
                         self.losses[idx_cow] += 1e-20 * (loss_mass + loss_pressure)
                         loss_a0 = self.COWs[idx_cow].compute_a0_loss()
-                        print(f"loss_a0 = {loss_a0}")
+                        print(f"loss_a0 = {lambda_a0 * loss_a0}")
                         self.losses[idx_cow] += lambda_a0 * loss_a0
                         if idx_cow != max(idx):
                             self.losses[idx_cow].backward(
@@ -2348,14 +2348,14 @@ class Multiple_COWs(object):
                         loss_mass, loss_pressure = self.COWs[
                             idx_cow
                         ].compute_bifurcation_loss()
-                        print(f"loss_mass = {loss_mass}")
-                        print(f"loss_pressure = {loss_pressure}")
+                        print(f"loss_mass = {lambda_mass *loss_mass}")
+                        print(f"loss_pressure = {lambda_pressure * loss_pressure}")
 
                         # loss += lambda_bif * (1000 * loss_mass + loss_pressure / 1e5)
                         self.losses[idx_cow] += lambda_mass * loss_mass
                         self.losses[idx_cow] += lambda_pressure * loss_pressure
                         loss_a0 = self.COWs[idx_cow].compute_a0_loss()
-                        print(f"loss_a0 = {loss_a0}")
+                        print(f"loss_a0 = {lambda_a0 * loss_a0}")
                         self.losses[idx_cow] += lambda_a0 * loss_a0
                         if idx_cow != max(idx):
                             self.losses[idx_cow].backward(
@@ -2377,15 +2377,15 @@ class Multiple_COWs(object):
                         loss_mass, loss_pressure = self.COWs[
                             idx_cow
                         ].compute_bifurcation_loss()
-                        print(f"loss_mass = {loss_mass}")
-                        print(f"loss_pressure = {loss_pressure}")
+                        print(f"loss_mass = {lambda_mass *loss_mass}")
+                        print(f"loss_pressure = {lambda_pressure * loss_pressure}")
                         print(f"mess _loss = {lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()}")
 
                         # loss += lambda_bif * (1000 * loss_mass +   loss_pressure / 1e5)
                         self.losses[idx_cow] += lambda_mass * loss_mass
                         self.losses[idx_cow] += lambda_pressure * loss_pressure
                         loss_a0 = self.COWs[idx_cow].compute_a0_loss()
-                        print(f"loss_a0 = {loss_a0}")
+                        print(f"loss_a0 = {lambda_a0 * loss_a0}")
                         self.losses[idx_cow] += lambda_a0 * loss_a0
 
                         try:
@@ -2425,10 +2425,10 @@ class Multiple_COWs(object):
         if dump_p_ref:
             out, idx = self.COWs[self.best_idx].solve_arteries(18)
             self.COWs[self.best_idx].save_ref_pressure(
-                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_{run_id}/p_ref/", out, idx=idx
+                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_3955_{run_id}/p_ref/", out, idx=idx
             )
             self.COWs[self.best_idx].dump_r0s(
-                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_{run_id}/r0s/"
+                f"/home/wssk-ptw/Operator/COW_DATASET/CVS_MULTI_3955_{run_id}/r0s/"
             )
 
     def solve_cvs(
