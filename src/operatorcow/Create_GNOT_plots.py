@@ -43,15 +43,23 @@ def main(config: DictConfig) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load the data
-    # dataset_train = COWDataset(config.data.path_train)
-    # dataset_test = COWDataset(config.data.path_test)
+    #dataset_train = COWDataset(config.data.path_train)
+    #dataset_test = COWDataset(config.data.path_test)
     dataset_train = COWDataset_GANO(config.data.path_train)
-    dataset_test = COWDataset_GANO(config.data.path_test)
+    #dataset_test = COWDataset_GANO(config.data.path_test)
 
     torch.manual_seed(config.seed)
     # save normalizer to renormalize data for plotting and evaluation
+    # for vano only normalizer_u_bc = normalizer_y 
+    normalizer_u_bc = dataset_train.y_normalizer.to(device)
+    print(f"normalizer_u_bc mean: {normalizer_u_bc.mean}")
+    print(f"normalizer_u_bc std: {normalizer_u_bc.std}")
+    print(f"normalizer_u_bc mean: {normalizer_u_bc}")
+    sys.exit()
     normalizer = dataset_train.y_normalizer.to(device)
     normalizer_up = dataset_test.up_normalizer.to(device)
+    normalizer_x = dataset_train.x_normalizer.to(device)
+    
 
     train_loader = MIODataLoader(
         dataset_train,
@@ -130,10 +138,10 @@ def main(config: DictConfig) -> None:
     )
     VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
 
-    # model.load_state_dict(torch.load(config.model.surrogate_weights_path))
+    model.load_state_dict(torch.load(config.model.surrogate_weights_path))
     VANO_model.to(device)
     VANO_model.eval()
-    if VANO:
+    if False:
         create_plot_VANO_paper(
             model=VANO_model,
             device=device,
@@ -169,7 +177,7 @@ def main(config: DictConfig) -> None:
         vars = ["pressure", "velocity", "area"]
         # create dictionary for storing results artery wise for each variable
         results = {var: {artery: [] for artery in arteries} for var in vars}
-        for _, data in enumerate(test_loader):
+        for data in test_loader:
             with torch.no_grad():
                 g, u_p, g_u = data
                 g, g_u, u_p = g.to(device), g_u.to(device), u_p.to(device)

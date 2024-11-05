@@ -20,9 +20,10 @@ from inverse.ROM.utils import (
     create_simulation_script,
     run_simulation,
 )
-from log_plots import plot_predictions
+from log_plots import plot_predictions, unit_to_mmHg
 from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
+
 
 ## Wszystko musi byc na same device
 # artery musi zwracać wszystkie dane potrzebne do obliczen
@@ -548,6 +549,7 @@ class COW(object):
         cvs: bool = False,
         r0s_path: str = None,
         p_ref_path: str = None,
+        idx: int = 1,
     ):
         self.rho = 1.06  ## must be in CGS units
         # self.SV_true = None
@@ -560,7 +562,7 @@ class COW(object):
         self.lr = lr
         torch.manual_seed(2137)
         self.RT = (
-            torch.Tensor([np.random.uniform(62770839.96, 194904651.43)])
+            torch.Tensor([self.sample_RT(idx)])
             .to(device)
             .requires_grad_(True)
         )
@@ -1748,6 +1750,26 @@ class COW(object):
 
         function makes use of artery.get_u_in(), artery.get_a_in(), artery.get_p_in()
         """
+        name_map = {
+            "L_PCA_P1": "Left PCA P1",
+            "L_PCA_P2": "Left PCA P2",
+            "R_PCA_P1": "Right PCA P1",
+            "R_PCA_P2": "Right PCA P2",
+            "L_MCA": "Left MCA",
+            "R_MCA": "Right MCA",
+            "L_ACA_A1": "Left ACA A1",
+            "L_ACA_A2": "Left ACA A2",
+            "R_ACA_A1": "Right ACA A1",
+            "R_ACA_A2": "Right ACA A2",
+            "AcoA": "ACoA",
+            "L_int_carotid_I": "Left Internal Carotid I",
+            "L_int_carotid_II": "Left Internal Carotid II",
+            "R_int_carotid_I": "Right Internal Carotid I",
+            "R_int_carotid_II": "Right Internal Carotid II",
+            "L_PcoA": "Left PCoA",
+            "R_PcoA": "Right PCoA",
+            "Basilar": "Basilar",
+        }
         for artery in self.arteries:
             u_in = artery.get_u_in().detach().cpu().numpy()
             a_in = artery.get_a_in().detach().cpu().numpy()
@@ -1757,37 +1779,46 @@ class COW(object):
             p_in_true = artery.get_true_p_in().detach().cpu().numpy()
 
             fig, axs = plt.subplots(2, 2, figsize=(10, 10))
-            axs[0, 0].plot(u_in, label="Predicted")
-            axs[0, 0].plot(u_in_true, label="True")
-            axs[0, 0].set_title("Velocity")
-            axs[0, 0].set_ylabel("cm/s")
-            axs[0, 0].set_xlabel("time_step")
+            fig.suptitle(f"Reconstructed vs Ground Truth {name_map[artery.name]}")
+
+            axs[0, 0].plot(unit_to_mmHg(p_in_true), label="Ground truth", color="black")
+            axs[0, 0].plot(unit_to_mmHg(p_in), label="Predicted", color="red", linestyle="--")
+            axs[0, 0].set_title("Pressure")
+            axs[0, 0].set_ylabel("mmHg")
+            axs[0, 0].set_xlabel("Time step")
             axs[0, 0].legend()
             axs[0, 0].grid()
-            axs[0, 1].plot(a_in, label="Predicted")
-            axs[0, 1].plot(a_in_true, label="True")
+
+            axs[0, 1].plot(a_in_true, label="Ground truth", color="black")
+            axs[0, 1].plot(a_in, label="Predicted", color="red", linestyle="--")
             axs[0, 1].set_title("Area")
             axs[0, 1].set_ylabel("cm^2")
-            axs[0, 1].set_xlabel("time_step")
-            y_lim = axs[0, 1].get_ylim()
-            axs[0, 1].set_ylim(y_lim[0] - 0.10 * y_lim[0], y_lim[1] + 0.10 * y_lim[1])
+            axs[0, 1].set_xlabel("Time step")
+            org_lim = axs[0, 1].get_ylim()
+            axs[0, 1].set_ylim([org_lim[0] - org_lim[0] * 0.10, org_lim[1] + org_lim[1] * 0.10])
             axs[0, 1].legend()
             axs[0, 1].grid()
-            axs[1, 0].plot(p_in, label="Predicted")
-            axs[1, 0].plot(p_in_true, label="True")
-            axs[1, 0].set_title("Pressure")
-            axs[1, 0].set_ylabel("Baye")
-            axs[1, 0].set_xlabel("time_step")
+
+            axs[1, 0].plot(u_in_true, label="Ground truth", color="black")
+            axs[1, 0].plot(u_in, label="Predicted", color="red", linestyle="--")
+            
+            axs[1, 0].set_title("Velocity")
+            axs[1, 0].set_ylabel("cm/s")
+            axs[1, 0].set_xlabel("Time step")
             axs[1, 0].legend()
             axs[1, 0].grid()
-            axs[1, 1].plot(a_in * u_in, label="Predicted")
-            axs[1, 1].plot(a_in_true * u_in_true, label="True")
+            axs[1, 1].plot(u_in_true * a_in_true, label="Ground truth", color="black")
+            axs[1, 1].plot(u_in * a_in, label="Predicted", color="red", linestyle="--")
+            
             axs[1, 1].set_title("Flow")
             axs[1, 1].set_ylabel("cm^3/s")
-            axs[1, 1].set_xlabel("time_step")
+            axs[1, 1].set_xlabel("Time step")
             axs[1, 1].legend()
             axs[1, 1].grid()
-            fig.suptitle(artery.name)
+
+
+
+          
             plt.savefig(os.path.join(path, f"{artery.name}.png"))
             plt.close()
 
@@ -1839,6 +1870,51 @@ class COW(object):
             fig.suptitle(artery.name)
             plt.savefig(os.path.join(path, f"{artery.name}_ROM.png"))
             plt.close()
+
+    def create_subsegments(self , a: float, b: float, n: int) -> List[Tuple[float, float]]:
+        """
+        Subdivide segment [a, b] into n disjoint subsegments.
+        
+        Args:
+            a (float): Left endpoint of the segment
+            b (float): Right endpoint of the segment
+            n (int): Number of subsegments
+        
+        Returns:
+            List[Tuple[float, float]]: List of subsegments represented as tuples (left, right)
+        
+        Raises:
+            ValueError: If n < 1 or a >= b
+        """
+        if n < 1:
+            raise ValueError("Number of subsegments must be positive")
+        if a >= b:
+            raise ValueError("Left endpoint must be less than right endpoint")
+        
+        # Calculate the length of each subsegment
+        segment_length = (b - a) / n
+        
+        # Create subsegments
+        subsegments = []
+        for i in range(n):
+            left = a + i * segment_length
+            right = a + (i + 1) * segment_length
+            subsegments.append((left, right))
+        
+        return subsegments
+    
+    def sample_RT(self, idx: int) -> float:
+        """
+        Sample RT value for the idx-th artery.
+        
+        Args:
+            idx (int): Index of the artery
+        
+        Returns:
+            float: Sampled RT value
+        """
+        subsegments = self.create_subsegments(62770839.96, 194904651.43, 10 )
+        return np.random.uniform(subsegments[idx][0], subsegments[idx][1])
 
     def dump_params(self, path: str):
         """
@@ -2321,15 +2397,15 @@ class Multiple_COWs(object):
                         self.losses[idx_cow] += (
                             lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()
                         )
-                        print(f"mes_loss = {lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()}")
+                        #print(f"mes_loss = {lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()}")
                         loss_mass, loss_pressure = self.COWs[
                             idx_cow
                         ].compute_bifurcation_loss()
-                        print(f"loss_mass = {lambda_mass *loss_mass}")
-                        print(f"loss_pressure = {lambda_pressure * loss_pressure}")
+                        #print(f"loss_mass = {lambda_mass *loss_mass}")
+                        #print(f"loss_pressure = {lambda_pressure * loss_pressure}")
                         self.losses[idx_cow] += 1e-20 * (loss_mass + loss_pressure)
                         loss_a0 = self.COWs[idx_cow].compute_a0_loss()
-                        print(f"loss_a0 = {lambda_a0 * loss_a0}")
+                        #print(f"loss_a0 = {lambda_a0 * loss_a0}")
                         self.losses[idx_cow] += lambda_a0 * loss_a0
                         if idx_cow != max(idx):
                             self.losses[idx_cow].backward(
@@ -2348,14 +2424,14 @@ class Multiple_COWs(object):
                         loss_mass, loss_pressure = self.COWs[
                             idx_cow
                         ].compute_bifurcation_loss()
-                        print(f"loss_mass = {lambda_mass *loss_mass}")
-                        print(f"loss_pressure = {lambda_pressure * loss_pressure}")
+                       # print(f"loss_mass = {lambda_mass *loss_mass}")
+                       # print(f"loss_pressure = {lambda_pressure * loss_pressure}")
 
                         # loss += lambda_bif * (1000 * loss_mass + loss_pressure / 1e5)
                         self.losses[idx_cow] += lambda_mass * loss_mass
                         self.losses[idx_cow] += lambda_pressure * loss_pressure
                         loss_a0 = self.COWs[idx_cow].compute_a0_loss()
-                        print(f"loss_a0 = {lambda_a0 * loss_a0}")
+                        #print(f"loss_a0 = {lambda_a0 * loss_a0}")
                         self.losses[idx_cow] += lambda_a0 * loss_a0
                         if idx_cow != max(idx):
                             self.losses[idx_cow].backward(
@@ -2377,15 +2453,15 @@ class Multiple_COWs(object):
                         loss_mass, loss_pressure = self.COWs[
                             idx_cow
                         ].compute_bifurcation_loss()
-                        print(f"loss_mass = {lambda_mass *loss_mass}")
-                        print(f"loss_pressure = {lambda_pressure * loss_pressure}")
-                        print(f"mess _loss = {lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()}")
+                        #print(f"loss_mass = {lambda_mass *loss_mass}")
+                        #print(f"loss_pressure = {lambda_pressure * loss_pressure}")
+                        #print(f"mess _loss = {lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()}")
 
                         # loss += lambda_bif * (1000 * loss_mass +   loss_pressure / 1e5)
                         self.losses[idx_cow] += lambda_mass * loss_mass
                         self.losses[idx_cow] += lambda_pressure * loss_pressure
                         loss_a0 = self.COWs[idx_cow].compute_a0_loss()
-                        print(f"loss_a0 = {lambda_a0 * loss_a0}")
+                        #print(f"loss_a0 = {lambda_a0 * loss_a0}")
                         self.losses[idx_cow] += lambda_a0 * loss_a0
 
                         try:

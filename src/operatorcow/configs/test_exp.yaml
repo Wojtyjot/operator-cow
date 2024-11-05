@@ -24,9 +24,9 @@ wandb:
     - development
 
 data:
-  path_train: /home/wssk-ptw/Operator/COW_DATASET/GNOT_train_new_BC_A_out.npy
-  path_test: /home/wssk-ptw/Operator/COW_DATASET/GNOT_test_new_BC_A_out.npy
-  batch_size: 16
+  path_train: /home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/GNOT_train_BIG_DATASET.npy
+  path_test: /home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/GNOT_test_BIG_DATASET.npy
+  batch_size: 32
 
 
 model:

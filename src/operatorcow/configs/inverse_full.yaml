@@ -59,14 +59,14 @@ model:
     latent_dim: 16
 
 inverse:
-  lambda_mass: 10000.0
+  lambda_mass: 1.0
   lambda_pressure: 0.00000001
-  lambda_mes: 100.0
-  lambda_a0: 1000.0
-  max_iters: 3000
+  lambda_mes: 0.1
+  lambda_a0: 100.0
+  max_iters: 3
   eps: 0.000006
   batch_size: 18
-  lr: 1
+  lr: 0.1
   log_every: 100
   path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
 

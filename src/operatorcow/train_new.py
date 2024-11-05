@@ -38,7 +38,7 @@ def train(
     start_epoch: int = 0,
     print_freq: int = 20,
     model_save_path: str = "/home/wssk-ptw/Operator/operator-cow/data/checkpoints",
-    model_name: str = "GNOT_FINAL_Wave.pt",
+    model_name: str = "GNOT_FINAL_BIG_DATASET_1_PI.pt",
     result_name: str = "results.pt",
 ):
     loss_train = []
@@ -629,8 +629,8 @@ def train_VANO(
     S: int = 4,
     start_epoch: int = 0,
     print_freq: int = 20,
-    model_save_path: str = "../../data/checkpoints/",
-    model_name: str = "VANO_TEST_WRO.pt",
+    model_save_path: str = "/home/wssk-ptw/Operator/operator-cow/data/checkpoints",
+    model_name: str = "VANO_FINAL_BIG_1_PI_no_BETA.pt",
     result_name: str = "results.pt",
 ):
 
@@ -672,19 +672,23 @@ def train_VANO(
             if loss.item() < best_val_metric:
                 best_val_metric = loss.item()
                 best_val_epoch = epoch
+                #print("SAVING MODEL")
                 torch.save(
                     model.state_dict(),
                     os.path.join(model_save_path, model_name),
                 )
+                #print(os.path.join(model_save_path, model_name))
+                #sys.exit()
+        if epoch % 100 == 0:
 
-        validate_epoch_VANO(
-            model=model,
-            metric_func=metric_func,
-            valid_loader=val_loader,
-            device=device,
-            normalizer_y=normalizer_y,
-            normalizer_up=normalizer_up,
-        )
+            validate_epoch_VANO(
+                model=model,
+                metric_func=metric_func,
+                valid_loader=val_loader,
+                device=device,
+                normalizer_y=normalizer_y,
+                normalizer_up=normalizer_up,
+            )
 
     return None
 

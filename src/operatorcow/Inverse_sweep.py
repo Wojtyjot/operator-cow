@@ -10,7 +10,7 @@ import torch.nn as nn
 import wandb
 import yaml
 from data_utils import COWDataset, MIODataLoader, WeightedLpRelLoss
-from inverse.COW import COW
+from inverse.COW import COW, Multiple_COWs
 from inverse.Find_RCR import find_windkessel
 from log_plots import plot_predictions
 from models.ae import MLAE
@@ -41,7 +41,7 @@ def main() -> None:
         config = yaml.load(file, Loader=yaml.FullLoader)
 
     run = wandb.init(config=config)
-    # print(wandb.wandb.config.trunk_size)
+    #print(wandb.config.trunk_size)
 
     # if wandb.config.log:
     #    wandb.init(
@@ -59,134 +59,48 @@ def main() -> None:
 
     # create normalizers from data not dataset.
     normalizer_x = UnitTransformer_2(
-        mean=torch.Tensor([[1.8504, 0.4671]]), std=torch.Tensor([[3.1793, 0.2733]])
+        mean=torch.Tensor([[1.8484, 0.4340]]), std=torch.Tensor([[3.1742, 0.2565]])
     )
+    # normalizer_x = UnitTransformer_2(
+    #    mean=torch.Tensor([[0.5, 0.5]]), std=torch.Tensor([[0.2945, 0.2916]])
+    # )
     normalizer_y = UnitTransformer_2(
-        mean=torch.Tensor([[1.2793e05, 6.2301e-02, 2.5150e01]]),
-        std=torch.Tensor([[2.3825e04, 4.3402e-02, 2.3625e01]]),
+        mean=torch.Tensor([[1.1976e+05, 6.5500e-02, 3.1310e+01]]),
+        std=torch.Tensor([[1.8099e+04, 5.1532e-02, 3.0624e+01]]),
     )
     normalizer_theta = UnitTransformer_2(
         mean=torch.Tensor(
-            [
-                [
-                    0.0000e00,
-                    1.1111e-01,
-                    5.5556e-02,
-                    1.1111e-01,
-                    1.1111e-01,
-                    1.1111e-01,
-                    1.1111e-01,
-                    1.1111e-01,
-                    1.1111e-01,
-                    5.5556e-02,
-                    1.1111e-01,
-                    1.7711e01,
-                    1.7697e01,
-                    2.9023e00,
-                    4.9929e-01,
-                    4.9919e-01,
-                    1.4972e00,
-                    1.5071e00,
-                    2.4015e00,
-                    2.3984e00,
-                    1.2007e00,
-                    1.1987e00,
-                    5.0048e-01,
-                    5.0026e-01,
-                    3.2972e00,
-                    3.3060e00,
-                    3.0045e-01,
-                    4.5951e00,
-                    4.6005e00,
-                    2.0034e-01,
-                    2.0103e-01,
-                    1.6219e-01,
-                    2.0010e-01,
-                    1.9990e-01,
-                    7.2940e-02,
-                    7.2973e-02,
-                    1.4333e-01,
-                    1.4283e-01,
-                    1.1701e-01,
-                    1.1733e-01,
-                    1.0679e-01,
-                    1.0718e-01,
-                    1.1981e-01,
-                    1.1998e-01,
-                    7.4069e-02,
-                    1.0483e-01,
-                    1.0494e-01,
-                    6.4335e01,
-                    1.3745e08,
-                    9.9070e-09,
-                ]
-            ]
+           [[0.0000e+00, 1.1111e-01, 5.5556e-02, 1.1111e-01, 1.1111e-01, 1.1111e-01,1.1111e-01, 1.1111e-01, 1.1111e-01, 5.5556e-02, 1.1111e-01, 1.7662e+01,
+         1.7706e+01, 2.9100e+00, 5.0039e-01, 5.0072e-01, 1.5065e+00, 1.4986e+00,
+         2.4043e+00, 2.3981e+00, 1.1987e+00, 1.2037e+00, 4.9940e-01, 4.9961e-01,
+         3.3058e+00, 3.3002e+00, 2.9983e-01, 4.6017e+00, 4.5875e+00, 1.9644e-01,
+         1.9959e-01, 1.6195e-01, 1.9981e-01, 2.0124e-01, 7.4259e-02, 7.2752e-02,
+         1.4357e-01, 1.4450e-01, 1.1695e-01, 1.1656e-01, 1.0671e-01, 1.0731e-01,
+         1.2332e-01, 1.2274e-01, 7.3721e-02, 1.0860e-01, 1.0854e-01, 6.9456e+01,
+         1.1287e+08, 1.2119e-08]]
         ),
         std=torch.Tensor(
-            [
-                [
-                    1.0000e-08,
-                    3.1427e-01,
-                    2.2906e-01,
-                    3.1427e-01,
-                    3.1427e-01,
-                    3.1427e-01,
-                    3.1427e-01,
-                    3.1427e-01,
-                    3.1427e-01,
-                    2.2906e-01,
-                    3.1427e-01,
-                    1.2840e00,
-                    1.3337e00,
-                    2.1418e-01,
-                    3.6259e-02,
-                    3.7161e-02,
-                    1.1344e-01,
-                    1.1346e-01,
-                    1.7721e-01,
-                    1.8211e-01,
-                    8.9553e-02,
-                    8.9506e-02,
-                    3.7230e-02,
-                    3.7044e-02,
-                    2.5030e-01,
-                    2.4927e-01,
-                    2.2290e-02,
-                    3.4071e-01,
-                    3.4680e-01,
-                    1.9805e-02,
-                    1.9342e-02,
-                    1.6200e-02,
-                    1.9381e-02,
-                    2.0292e-02,
-                    7.2833e-03,
-                    7.4511e-03,
-                    1.4521e-02,
-                    1.4617e-02,
-                    1.1485e-02,
-                    1.1885e-02,
-                    1.0993e-02,
-                    1.0710e-02,
-                    1.2050e-02,
-                    1.2239e-02,
-                    7.3845e-03,
-                    1.0549e-02,
-                    1.0472e-02,
-                    2.6040e00,
-                    1.7545e07,
-                    1.1245e-08,
-                ]
-            ]
+           [[1.0000e-08, 3.1427e-01, 2.2906e-01, 3.1427e-01, 3.1427e-01, 3.1427e-01, 3.1427e-01, 3.1427e-01, 3.1427e-01, 2.2906e-01, 3.1427e-01, 1.3492e+00,
+         1.3395e+00, 2.2235e-01, 3.6863e-02, 3.6870e-02, 1.1427e-01, 1.1470e-01,
+         1.7390e-01, 1.7464e-01, 9.0034e-02, 8.7888e-02, 3.8154e-02, 3.7272e-02,
+         2.4628e-01, 2.4983e-01, 2.2109e-02, 3.4318e-01, 3.4641e-01, 3.4018e-02,
+         3.5886e-02, 3.1958e-02, 3.9021e-02, 3.9338e-02, 1.3626e-02, 1.4379e-02,
+         2.6881e-02, 2.7712e-02, 2.2955e-02, 2.3193e-02, 2.1227e-02, 2.1547e-02,
+         2.1564e-02, 2.2400e-02, 1.4715e-02, 1.8198e-02, 1.8286e-02, 5.7472e+00,
+         1.6219e+07, 1.1749e-08]]
         ),
     )
     normalizer_u_bc = UnitTransformer_2(
-        mean=torch.Tensor([[25.1235]]), std=torch.Tensor([[23.7002]])
+        mean=torch.Tensor([[31.2255]]), std=torch.Tensor([[30.6789]])
     )
 
     normalizer_x = normalizer_x.to(device)
     normalizer_y = normalizer_y.to(device)
     normalizer_theta = normalizer_theta.to(device)
     normalizer_u_bc = normalizer_u_bc.to(device)
+
+
+    
 
     # load models
     model_surrogate = GNOT(
@@ -234,38 +148,75 @@ def main() -> None:
     for subfolder in val_path.iterdir():
         if subfolder.is_dir():
             arteries_log_save = get_arteries_dict()
-            fig_path = "/home/wssk-ptw/Operator/COW_DATASET/WYNIKI/" + str(
+            fig_path = "/home/wssk-ptw/Operator/COW_DATASET/NEW_DATASET_WYNIKI/" + str(
                 subfolder.name
             )
             if not Path(fig_path).exists():
                 Path(fig_path).mkdir(parents=True, exist_ok=True)
 
             d_p = str(subfolder.resolve()) + "/"
-            cow = COW(
-                model_surrogate=model_surrogate,
-                AE_model=None,
-                normalizer_x=normalizer_x,
-                normalizer_y=normalizer_y,
-                normalizer_theta=normalizer_theta,
-                device=device,
-                joints_path=wandb.config.joints_path,
-                lr=wandb.config.lr,
-                track=False,
-                data_path=d_p,
-                normalizer_u_bc=normalizer_u_bc,
-                model_VANO=VANO_model,
-                VANO=True,
+
+            COWs = list(
+                COW(
+                    model_surrogate=model_surrogate,
+                    AE_model=None,
+                    normalizer_x=normalizer_x,
+                    normalizer_y=normalizer_y,
+                    normalizer_theta=normalizer_theta,
+                    device=device,
+                    joints_path=wandb.config.joints_path,
+                    lr=wandb.config.lr,
+                    track=False,
+                    data_path=d_p,
+                    normalizer_u_bc=normalizer_u_bc,
+                    model_VANO=VANO_model,
+                    VANO=True,
+                )
+                for _ in range(10)
             )
 
-            L2 = cow.solve_accumulate_2(
+            #cow = COW(
+            #    model_surrogate=model_surrogate,
+            #    AE_model=None,
+            #    normalizer_x=normalizer_x,
+            #    normalizer_y=normalizer_y,
+            #    normalizer_theta=normalizer_theta,
+            #    device=device,
+            #    joints_path=wandb.config.joints_path,
+            #    lr=wandb.config.lr,
+            #    track=False,
+            #    data_path=d_p,
+            #    normalizer_u_bc=normalizer_u_bc,
+            #    model_VANO=VANO_model,
+            #    VANO=True,
+            #)
+            M_COWs = Multiple_COWs(
+                COWs,
+                normalizer_x,
+                normalizer_y,
+                normalizer_theta,
+                model_surrogate,
+                wandb.config.lr,
+            )
+            M_COWs.solve_inverse(
                 max_iters=wandb.config.max_iters,
                 eps=wandb.config.eps,
-                batch_size=wandb.config.batch_size,
+                batch_size=2,
                 lambda_mes=wandb.config.lambda_mes,
                 lambda_mass=wandb.config.lambda_mass,
                 lambda_pressure=wandb.config.lambda_pressure,
                 lambda_a0=wandb.config.lambda_a0,
             )
+            L2 = M_COWs.get_L2()
+            #L2 = cow.solve_accumulate_2(
+            #    max_iters=wandb.config.max_iters,
+            #    eps=wandb.config.eps,
+            #    batch_size=wandb.config.batch_size,
+            #    lambda_mes=wandb.config.lambda_mes,
+            #    lambda_mass=wandb.config.lambda_mass,
+            #    lambda_pressure=wandb.config.lambda_pressure,
+            #    lambda_a0=wandb.config.lambda_a0,
+            #)
             # estimate windkessel and perform simulation etc.
             # R2, C, Z = find_windkessel(
             #    cow, 5
@@ -288,13 +239,13 @@ def main() -> None:
             #    log_every=wandb.config.log_every,
             # )
 
-            arteries_log = cow.get_validation(arteries_log)
-            arteries_log_save = cow.get_validation(arteries_log_save)
+            #arteries_log = cow.get_validation(arteries_log)
+            #arteries_log_save = cow.get_validation(arteries_log_save)
             L2s.append(L2)
-            cow.dump_plots(fig_path)
-            cow.dump_params(fig_path)
-            cow.dump_statistics(fig_path)
-            cow.dump_validation(fig_path, arteries_log_save)
+            #cow.dump_plots(fig_path)
+            #cow.dump_params(fig_path)
+            #cow.dump_statistics(fig_path)
+            #cow.dump_validation(fig_path, arteries_log_save)
             # cow.dump_ROM_plots(fig_path)
 
             print(f"Validation data: {subfolder}")
@@ -310,38 +261,7 @@ def main() -> None:
     tbl_l2.add_data(L2s.mean(), L2s.std())
     wandb.log({"L2": tbl_l2})
 
-    tbl_arteries = wandb.Table(
-        columns=[
-            "Artery",
-            "rL2 Area mean",
-            "rL2 Area std",
-            "rL2 Velocity mean",
-            "rL2 Velocity std",
-            "rL2 Flow mean",
-            "rL2 Flow std",
-            "rL2 Pressure mean",
-            "rL2 Pressure std",
-        ]
-    )
-    # transform lists inside nested dict to numpy arrays
-    for artery in arteries_log:
-        for key in arteries_log[artery]:
-            arteries_log[artery][key] = np.array(arteries_log[artery][key])
-
-    for artery in arteries_log:
-        tbl_arteries.add_data(
-            artery,
-            arteries_log[artery]["Area"].mean(),
-            arteries_log[artery]["Area"].std(),
-            arteries_log[artery]["Velocity"].mean(),
-            arteries_log[artery]["Velocity"].std(),
-            arteries_log[artery]["Flow"].mean(),
-            arteries_log[artery]["Flow"].std(),
-            arteries_log[artery]["Pressure"].mean(),
-            arteries_log[artery]["Pressure"].std(),
-        )
-    wandb.log({"Arteries": tbl_arteries})
-
+    
     return L2s.mean()
 
 

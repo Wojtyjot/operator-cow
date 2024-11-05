@@ -24,7 +24,7 @@ wandb:
     - development
 
 data:
-  data_path: /home/wssk-ptw/Operator/COW_DATASET/VALIDATION/
+  data_path: /home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/VALIDATION_WRO_1_PI/
   joints_path: /home/wssk-ptw/Operator/operator-cow/data/joints.csv
   batch_size: 18
 
@@ -49,8 +49,8 @@ model:
   attn_dropout: 0.0
   horiz_fourier_dim: 0
   AE_weights_path: /data/path/placeholder
-  surrogate_weights_path: /home/wssk-ptw/Operator/Model_archive/GNOT_FINAL.pt
-  VANO_weights_path: /home/wssk-ptw/Operator/Model_archive/VANO_FINAL_500.pt
+  surrogate_weights_path:  /home/wssk-ptw/Operator/Model_archive/GNOT_FINAL_BIG_DATASET_1_PI.pt
+  VANO_weights_path: /home/wssk-ptw/Operator/Model_archive/VANO_FINAL_BIG_1_PI.pt
   ae:
     layers: [100, 128, 256, 128, 32]
   VANO:
@@ -59,14 +59,14 @@ model:
     latent_dim: 16
 
 inverse:
-  lambda_mass: 10
-  lambda_pressure: 1e-10
-  lambda_mes: 2e-2
-  lambda_a0: 1e2
+  lambda_mass: 1.0
+  lambda_pressure: 0.00000001
+  lambda_mes: 0.1
+  lambda_a0: 100.0
   max_iters: 3000
   eps: 0.000006
   batch_size: 18
-  lr: 1
+  lr: 0.1
   log_every: 100
   path_to_csv: /home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv
 

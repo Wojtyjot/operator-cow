@@ -201,43 +201,42 @@ def plot_pred_paper(
     print("Plotting")
     fig, axs = plt.subplots(2, 2, figsize=(10, 10))
     fig.suptitle(f"Predictions vs Ground truth for {artery}")
-    axs[0, 0].plot(unit_to_mmHg(predictions[:100, 0]), label="Predicted")
-    axs[0, 0].plot(unit_to_mmHg(ground_truth[:100, 0]), label="Ground truth")
+    
+    axs[0, 0].plot(unit_to_mmHg(ground_truth[:100, 0]), label="Ground truth", color="black")
+    axs[0, 0].plot(unit_to_mmHg(predictions[:100, 0]), label="Predicted", color="red", linestyle="--")
     axs[0, 0].set_title("Pressure")
     axs[0, 0].set_ylabel("mmHg")
     axs[0, 0].set_xlabel("Time step")
     axs[0, 0].legend()
-    # org_lim = axs[0, 0].get_ylim()
-    # print(org_lim)
     axs[0, 0].grid()
 
-    axs[0, 1].plot(predictions[:100, 1], label="Predicted")
-    axs[0, 1].plot(ground_truth[:100, 1], label="Ground truth")
+    axs[0, 1].plot(ground_truth[:100, 1], label="Ground truth", color="black")
+    axs[0, 1].plot(predictions[:100, 1], label="Predicted", color="red", linestyle="--")
+   
     axs[0, 1].set_title("Area")
     axs[0, 1].set_ylabel("cm^2")
     axs[0, 1].set_xlabel("Time step")
     org_lim = axs[0, 1].get_ylim()
     axs[0, 1].set_ylim([org_lim[0] - org_lim[0] * 0.10, org_lim[1] + org_lim[1] * 0.10])
-
     axs[0, 1].legend()
     axs[0, 1].grid()
-
-    axs[1, 0].plot(predictions[:100, 2], label="Predicted")
-    axs[1, 0].plot(ground_truth[:100, 2], label="Ground truth")
+    axs[1, 0].plot(ground_truth[:100, 2], label="Ground truth", color="black")
+    axs[1, 0].plot(predictions[:100, 2], label="Predicted", color="red", linestyle="--")
+    
     axs[1, 0].set_title("Velocity")
     axs[1, 0].set_ylabel("cm/s")
     axs[1, 0].set_xlabel("Time step")
     axs[1, 0].legend()
     axs[1, 0].grid()
-
-    axs[1, 1].plot(predictions[:100, 2] * predictions[:100, 1], label="Predicted")
-    axs[1, 1].plot(ground_truth[:100, 2] * ground_truth[:100, 1], label="Ground truth")
+    axs[1, 1].plot(ground_truth[:100, 2] * ground_truth[:100, 1], label="Ground truth", color="black")
+    axs[1, 1].plot(predictions[:100, 2] * predictions[:100, 1], label="Predicted", color="red", linestyle="--")
+    
     axs[1, 1].set_title("Flow")
     axs[1, 1].set_ylabel("cm^3/s")
     axs[1, 1].set_xlabel("Time step")
     axs[1, 1].legend()
-
     axs[1, 1].grid()
+
     plt.savefig(os.path.join(path, f"{artery}.png"))
     plt.close()
 

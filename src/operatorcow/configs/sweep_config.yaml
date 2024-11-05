@@ -9,13 +9,13 @@ metric:
 
 parameters:
   lambda_mass:
-   values: [100, 1000, 10000]
+   values: [1, 10, 100]
   lambda_pressure:
-    values: [0.00001, 0.0000001, 0.00000001]
+    values: [1e-10, 1e-9, 1e-8]
   lambda_mes:
-    values: [100, 10, 1]
+    values: [1e-2, 1e-1, 1]
   lambda_a0:
-    values: [1000]
+    values: [1e2]
   max_iters:
     values: [3000]
   eps:
@@ -23,7 +23,7 @@ parameters:
   batch_size:
     values: [18]
   lr:
-    values: [0.1, 0.01, 0.001]
+    values: [1, 0.1, 0.01]
   log_every: 
     values: [100]
   path_to_csv:
@@ -63,9 +63,9 @@ parameters:
   AE_weights_path:
     values: [/data/path/placeholder]
   surrogate_weights_path:
-    values: [/home/wssk-ptw/Operator/Model_archive/GNOT_FINAL.pt]
+    values: [/home/wssk-ptw/Operator/Model_archive/GNOT_FINAL_BIG_DATASET_1_PI.pt]
   VANO_weights_path:
-    values: [/home/wssk-ptw/Operator/Model_archive/VANO_FINAL.pt]
+    values: [/home/wssk-ptw/Operator/Model_archive/VANO_FINAL_BIG_1_PI.pt]
   layers_encoder:
     values: [[111, 256, 256, 256, 32]]
   layers_decoder:
@@ -73,7 +73,7 @@ parameters:
   latent_dim:
     values: [16]
   data_path:
-    values: [/home/wssk-ptw/Operator/COW_DATASET/VALIDATION/]
+    values: [/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/VALIDATION_WRO_1_PI/]
   joints_path:
     values: [/home/wssk-ptw/Operator/operator-cow/data/joints.csv]
 
