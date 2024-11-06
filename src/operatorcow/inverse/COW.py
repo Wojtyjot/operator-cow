@@ -1369,6 +1369,28 @@ class COW(object):
         except ValueError:
             pass
 
+    def dump_solutions(self,path: str, pred: torch.Tensor, idx: List[int]):
+        """
+        Function saves predictions for every artery
+        """
+        for i, idx in enumerate(idx):
+            #save velocity
+            np.save(
+                path + self.arteries[idx].name + "_velocity" + ".npy",
+                pred[i, :, 2].detach().cpu().numpy(),
+            )
+            #save pressure
+            np.save(
+                path + self.arteries[idx].name + "_pressure" + ".npy",
+                pred[i, :, 0].detach().cpu().numpy(),
+            )
+            #save area
+            np.save(
+                path + self.arteries[idx].name + "_area" + ".npy",
+                pred[i, :, 1].detach().cpu().numpy(),
+            )
+
+
     def propagate_RT(self):
         """
         Function passes RT value to arteries
@@ -2634,6 +2656,9 @@ class Multiple_COWs(object):
                         self.losses[idx_cow] += lambda_pressure * loss_pressure
                         loss_a0 = self.COWs[idx_cow].compute_a0_loss()
                         self.losses[idx_cow] += lambda_a0 * loss_a0
+                        self.losses[idx_cow] += (
+                            lambda_p_ref * self.COWs[idx_cow].compute_pressure_loss()
+                        )
 
                         try:
                             if idx_cow != max(idx):
@@ -2668,6 +2693,15 @@ class Multiple_COWs(object):
             print(f"Loss for cow {idx_cow} = {self.losses[idx_cow]}")
 
         self.best_idx = np.argmin(self.losses)
+
+    def dump_ref_for_cvs(self, path):
+        out, idx = self.COWs[self.best_idx].solve_arteries(18)
+        self.COWs[self.best_idx].save_ref_pressure(path, out, idx=idx)
+        self.COWs[self.best_idx].dump_r0s(path)
+
+    def dump_solutions(self, path: str):
+        out, idx = self.COWs[self.best_idx].solve_arteries(18)
+        self.COWs[self.best_idx].dump_solutions(path, out, idx=idx)
 
     def get_L2(self):
         return self.validation[self.best_idx]
