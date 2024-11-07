@@ -1376,17 +1376,17 @@ class COW(object):
         for i, idx in enumerate(idx):
             #save velocity
             np.save(
-                path + self.arteries[idx].name + "_velocity" + ".npy",
+                path +"/" + self.arteries[idx].name + "_velocity" + ".npy",
                 pred[i, :, 2].detach().cpu().numpy(),
             )
             #save pressure
             np.save(
-                path + self.arteries[idx].name + "_pressure" + ".npy",
+                path + "/" + self.arteries[idx].name + "_pressure" + ".npy",
                 pred[i, :, 0].detach().cpu().numpy(),
             )
             #save area
             np.save(
-                path + self.arteries[idx].name + "_area" + ".npy",
+                path+ "/" + self.arteries[idx].name + "_area" + ".npy",
                 pred[i, :, 1].detach().cpu().numpy(),
             )
 
@@ -2701,6 +2701,7 @@ class Multiple_COWs(object):
 
     def dump_solutions(self, path: str):
         out, idx = self.COWs[self.best_idx].solve_arteries(18)
+        path = str(path.resolve())
         self.COWs[self.best_idx].dump_solutions(path, out, idx=idx)
 
     def get_L2(self):

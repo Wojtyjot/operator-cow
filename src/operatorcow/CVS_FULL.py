@@ -238,8 +238,18 @@ def main(config: DictConfig) -> None:
     it = 0
     for con_type in cvs_path.iterdir():
         cow_path = cvs_path / con_type
+        #get laset element of path
+        con_type = con_type.parts[-1]
+       # print(con_type)
+        
         for cow in cow_path.iterdir():
             con_path = cow_path / cow
+            cow = cow.parts[-1]
+            if cow == "4729":
+                print("continue")
+                continue
+            #print(cow)
+            #sys.exit()
             for sub in ["ref", "1", "2", "3"]:
                 if sub == "ref":
                     ### here create cows and solve, and dump ref
@@ -307,7 +317,7 @@ def main(config: DictConfig) -> None:
                     if config.log:
                         wandb.log({"rL2 ref": L2})
 
-
+                    del COWs
                     #Need to sve ref
                 
                 else:
@@ -334,8 +344,8 @@ def main(config: DictConfig) -> None:
                             model_VANO=VANO_model,
                             VANO=True,
                             cvs=True,
-                            r0s_path=path_to_ref +"/"+ "r0s.npy",
-                            p_ref_path=path_to_ref,
+                            r0s_path=initial_run_ref + "r0s.npy",
+                            p_ref_path=initial_run_ref,
                         )
                         for i in range(10)
                     )
@@ -362,7 +372,10 @@ def main(config: DictConfig) -> None:
                     rec_path = rec_folder / con_type /  cow / sub
 
                     log_save = get_arteries_dict()
+                    if not os.path.exists(rec_path):
+                        os.makedirs(rec_path)
                     M_COWs.dump_solutions(rec_path)
+                    
                     arteries_dict[f"{con_type}_{sub}"] = M_COWs.get_validation(arteries_dict[f"{con_type}_{sub}"])
                     L2 = M_COWs.get_L2()
                     L2_dict[f"{con_type}_{sub}"].append(L2)
@@ -372,6 +385,8 @@ def main(config: DictConfig) -> None:
                     M_COWs.get_validation(log_save)
                     M_COWs.dump_validation(fig, log_save)
                     M_COWs.dump_reconstructed_u_bc_plots(fig)
+
+                    del COWs
         it += 1
         if it == 5:
             break
