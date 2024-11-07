@@ -204,8 +204,8 @@ def main(config: DictConfig) -> None:
             i += 1
             wandb.log({"rL2": L2})
 
-            #if i == 1:
-            #    break
+            if i == 30:
+                break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
     L2s = np.array(L2s)

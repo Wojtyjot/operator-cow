@@ -36,7 +36,7 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="Inverse_full_new_hyper")
+@hydra.main(version_base=None, config_path="configs", config_name="Inverse_full_new_hyper_CVS")
 def main(config: DictConfig) -> None:
 
     if config.log:
@@ -235,7 +235,7 @@ def main(config: DictConfig) -> None:
         "7_3": L2_7_3,
     }
 
-
+    it = 0
     for con_type in cvs_path.iterdir():
         cow_path = cvs_path / con_type
         for cow in cow_path.iterdir():
@@ -246,9 +246,11 @@ def main(config: DictConfig) -> None:
                     log_arteries = get_arteries_dict()
                     path_to_ref = con_path / sub
                     fig = fig_path / con_type / cow / sub
+                    fig = str(fig.resolve()) + "/"
                     if not os.path.exists(fig):
                         os.makedirs(fig)
 
+                    path_to_ref = str(path_to_ref.resolve()) + "/"
                     COWs = list(
                         COW(
                         model_surrogate=model_surrogate,
@@ -287,6 +289,7 @@ def main(config: DictConfig) -> None:
                     )
 
                     initial_run_ref = con_path / "initial_run_ref"
+                    initial_run_ref = str(initial_run_ref.resolve()) + "/"
                     if not os.path.exists(initial_run_ref):
                         os.makedirs(initial_run_ref)
 
@@ -311,6 +314,8 @@ def main(config: DictConfig) -> None:
                     # here solve cvs case and dump solutions
                     path_to_cvs = con_path / sub
                     fig = fig_path / con_type / cow / sub
+                    fig = str(fig.resolve()) + "/"
+                    path_to_cvs = str(path_to_cvs.resolve()) + "/"
                     if not os.path.exists(fig):
                         os.makedirs(fig)
                     COWs = list(
@@ -329,7 +334,7 @@ def main(config: DictConfig) -> None:
                             model_VANO=VANO_model,
                             VANO=True,
                             cvs=True,
-                            r0s_path=path_to_ref / "r0s.npy",
+                            r0s_path=path_to_ref +"/"+ "r0s.npy",
                             p_ref_path=path_to_ref,
                         )
                         for i in range(10)
@@ -354,7 +359,7 @@ def main(config: DictConfig) -> None:
                     )
                     
                     # DUMP SOLUTIONS !!!! TODO
-                    rec_path = rec_folder / con_type / cow / sub
+                    rec_path = rec_folder / con_type /  cow / sub
 
                     log_save = get_arteries_dict()
                     M_COWs.dump_solutions(rec_path)
@@ -367,6 +372,9 @@ def main(config: DictConfig) -> None:
                     M_COWs.get_validation(log_save)
                     M_COWs.dump_validation(fig, log_save)
                     M_COWs.dump_reconstructed_u_bc_plots(fig)
+        it += 1
+        if it == 5:
+            break
 
     if config.log:
         for key, value in L2_dict.items():
@@ -409,3 +417,6 @@ def main(config: DictConfig) -> None:
                 )
             wandb.log({f"{key}_arteries": tbl_arteries})
                     
+
+if __name__ == "__main__":
+    main()

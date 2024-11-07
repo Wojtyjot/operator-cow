@@ -707,10 +707,10 @@ class COW(object):
                     "R_ACA_A1",
                     "L_PCA_P1",
                     "R_PCA_P1",
-                    # "L_ACA_A2",
-                    # "R_ACA_A2",
-                    # "L_PCA_P2",
-                    # "R_PCA_P2",
+                    #"L_ACA_A2",
+                    #"R_ACA_A2",
+                    #"L_PCA_P2",
+                    #"R_PCA_P2",
                 ]:
                     self.arteries.append(
                         Artery(
@@ -798,14 +798,14 @@ class COW(object):
                 elif artery in [
                     "L_MCA",
                     "R_MCA",
-                    "L_ACA_A1",
-                    "R_ACA_A1",
-                    "L_PCA_P1",
-                    "R_PCA_P1",
-                    # "L_ACA_A2",
-                    # "R_ACA_A2",
-                    # "L_PCA_P2",
-                    # "R_PCA_P2",
+                    #"L_ACA_A1",
+                    #"R_ACA_A1",
+                    #"L_PCA_P1",
+                    #"R_PCA_P1",
+                    "L_ACA_A2",
+                    "R_ACA_A2",
+                    "L_PCA_P2",
+                    "R_PCA_P2",
                 ]:
                     self.arteries.append(
                         Artery(
