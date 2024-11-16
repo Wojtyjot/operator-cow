@@ -43,9 +43,9 @@ def main(config: DictConfig) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load the data
-    #dataset_train = COWDataset(config.data.path_train)
-    #dataset_test = COWDataset(config.data.path_test)
-    dataset_train = COWDataset_GANO(config.data.path_train)
+    dataset_train = COWDataset(config.data.path_train)
+    dataset_test = COWDataset(config.data.path_test)
+    #dataset_train = COWDataset_GANO(config.data.path_train)
     #dataset_test = COWDataset_GANO(config.data.path_test)
 
     torch.manual_seed(config.seed)
@@ -55,7 +55,7 @@ def main(config: DictConfig) -> None:
     print(f"normalizer_u_bc mean: {normalizer_u_bc.mean}")
     print(f"normalizer_u_bc std: {normalizer_u_bc.std}")
     print(f"normalizer_u_bc mean: {normalizer_u_bc}")
-    sys.exit()
+    #sys.exit()
     normalizer = dataset_train.y_normalizer.to(device)
     normalizer_up = dataset_test.up_normalizer.to(device)
     normalizer_x = dataset_train.x_normalizer.to(device)

@@ -59,6 +59,7 @@ class Artery(object):
         cvs: bool = False,
         r0s: torch.Tensor = None,
         p_ref: torch.Tensor = None,
+        latent_bc: torch.Tensor = None,
     ):
         # musi tu byc self r0s i propagowane z r0s z cow do arteries w optymalizacji
         self.name = name
@@ -85,6 +86,7 @@ class Artery(object):
                 raise ValueError("r0s must be provided for CVS")
             self.r0s = r0s
             self.p_ref = p_ref
+            self.latent_bc = latent_bc
         self.initialize_parameters(mesurement, cvs)
 
         # del self.g.ndata['y']
@@ -101,6 +103,12 @@ class Artery(object):
                 self.u_bc_latent = (
                     torch.randn(1, 16).to(self.device).requires_grad_(True)
                 )
+                if cvs:
+                    #load latent from initial run
+                    self.u_bc_latent = (
+                        self.latent_bc.to(self.device).requires_grad_(True)
+                    )
+
                 # print(self.u_bc.shape)
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 self.mesurement_value = (
@@ -145,6 +153,11 @@ class Artery(object):
                 self.u_bc_latent = (
                     torch.randn(1, 16).to(self.device).requires_grad_(True)
                 )
+                if cvs:
+                    #load latent from initial run
+                    self.u_bc_latent = (
+                        self.latent_bc.to(self.device).requires_grad_(True)
+                    )
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
@@ -519,6 +532,9 @@ class Artery(object):
 
     def get_u_bc_rec(self):
         return self.u_bc_rec
+    
+    def get_latent(self):
+        return self.u_bc_latent
 
 
 class COW(object):
@@ -566,6 +582,7 @@ class COW(object):
             .to(device)
             .requires_grad_(True)
         )
+    
         self.CT = 1.34 / self.RT.detach()
         self.VANO = VANO
         self.device = device
@@ -646,6 +663,11 @@ class COW(object):
         if cvs:
             # TRZEBA r0s dodac
             # LOAD r0s
+            # load ref RT
+            RT = np.load(p_ref_path + "_RT.npy", allow_pickle=True)
+            self.RT = torch.from_numpy(RT).float().to(self.device).requires_grad_(True)
+            self.CT = 1.34 / self.RT.detach()
+
             r0s = np.load(r0s_path, allow_pickle=True)
             r0s = torch.from_numpy(r0s).float()
             self.r0s = r0s
@@ -703,15 +725,20 @@ class COW(object):
                 elif artery in [
                     "L_MCA",
                     "R_MCA",
-                    "L_ACA_A1",
-                    "R_ACA_A1",
-                    "L_PCA_P1",
-                    "R_PCA_P1",
-                    #"L_ACA_A2",
-                    #"R_ACA_A2",
-                    #"L_PCA_P2",
-                    #"R_PCA_P2",
+                    #"L_ACA_A1",
+                    #"R_ACA_A1",
+                    #"L_PCA_P1",
+                    #"R_PCA_P1",
+                    "L_ACA_A2",
+                    "R_ACA_A2",
+                    "L_PCA_P2",
+                    "R_PCA_P2",
                 ]:
+                    latent_bc = np.load(
+                    p_ref_path + artery + "_latent" + ".npy", allow_pickle=True
+                )
+                    latent_bc = latent_bc + np.random.normal(0,0.5, latent_bc.shape)
+                    latent_bc = torch.from_numpy(latent_bc).float().to(self.device)
                     self.arteries.append(
                         Artery(
                             g,
@@ -725,10 +752,17 @@ class COW(object):
                             cvs=cvs,
                             r0s=r0s,
                             p_ref=p_ref,
+                            latent_bc=latent_bc,
                         )
                     )
 
                 else:
+                    latent_bc = np.load(
+                    p_ref_path + artery + "_latent" + ".npy", allow_pickle=True
+                )
+                    latent_bc = latent_bc + np.random.normal(0,0.5, latent_bc.shape)
+                    
+                    latent_bc = torch.from_numpy(latent_bc).float().to(self.device)
                     self.arteries.append(
                         Artery(
                             g,
@@ -742,6 +776,7 @@ class COW(object):
                             cvs=cvs,
                             r0s=r0s,
                             p_ref=p_ref,
+                            latent_bc=latent_bc,
                         )
                     )  # Theta in arteries is without SV
 
@@ -801,7 +836,7 @@ class COW(object):
                     #"L_ACA_A1",
                     #"R_ACA_A1",
                     #"L_PCA_P1",
-                    #"R_PCA_P1",
+                    #"R_PCA_P1", #change
                     "L_ACA_A2",
                     "R_ACA_A2",
                     "L_PCA_P2",
@@ -1202,6 +1237,7 @@ class COW(object):
                 d1 = self.arteries[int(d1)]
                 d2 = self.arteries[int(d2)]
                 if merging:
+                    
                     loss_mass += torch.mean(
                         torch.square(
                             p.get_u_in() * p.get_a_in()
@@ -1360,6 +1396,16 @@ class COW(object):
         for artery in self.arteries:
             r0s.append(artery.get_r0())
         np.save(path + "r0s.npy", r0s)
+
+    def dump_latent(self, path:str):
+        """
+        Function saves latent space for every artery
+        """
+        for artery in self.arteries:
+            if artery.is_root():
+                continue
+            else:
+                np.save(path + artery.name + "_latent" + ".npy", artery.get_latent().detach().cpu().numpy())
 
     def get_arteries(self, idx, model: str = "GNOT"):
         try:
@@ -2213,6 +2259,12 @@ class COW(object):
             ]:
                 artery.mesurement = False  # moze jakis setter zrobic
 
+    def dump_RT(self, path:str):
+        """
+        Function dumps RT to path
+        """
+        np.save(path + "_RT" + ".npy", self.RT.detach().cpu().numpy())
+
 
 class Multiple_COWs(object):
     """
@@ -2563,7 +2615,7 @@ class Multiple_COWs(object):
                     if self.COWs[idx_cow].optimizer_RT is not None:
                         self.COWs[idx_cow].optimizer_RT.zero_grad()
 
-                    if it < 2:
+                    if it < 0:
                         self.losses[idx_cow] += (
                             lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()
                         )
@@ -2589,7 +2641,7 @@ class Multiple_COWs(object):
                         # print(f"RT = {self.RT}")
                         # print(f"CT = {self.CT}")
 
-                    elif it < 1000 / 5 and it >= 2:
+                    elif it < 1000 / 5 and it >= 0:
                         if self.COWs[idx_cow].optimizer_mes is None:
                             self.COWs[idx_cow].create_optimizer(self.lr, "MES")
                         self.losses[idx_cow] += (
@@ -2750,3 +2802,17 @@ class Multiple_COWs(object):
             for idx, cow in enumerate(self.COWs):
                 cow.get_validation(arteries_log)
         return arteries_log
+    
+    def dump_latent(self, path:str, best: bool =True):
+        if best:
+            self.COWs[self.best_idx].dump_latent(path)
+        else:
+            for idx, cow in enumerate(self.COWs):
+                cow.dump_latent(path + f"/COW_{idx}")
+
+    def dump_RT(self, path: str, best: bool = True):
+        if best:
+            self.COWs[self.best_idx].dump_RT(path)
+        else:
+            for idx, cow in enumerate(self.COWs):
+                cow.dump_RT(path + f"/COW_{idx}")

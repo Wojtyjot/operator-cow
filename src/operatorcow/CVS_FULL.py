@@ -136,8 +136,8 @@ def main(config: DictConfig) -> None:
     arteries_log = get_arteries_dict()
 
     cvs_path = Path(config.data.cvs_path) #path to cvs
-    rec_folder = Path("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/Rec_CVS/")
-    fig_path = Path("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/CVS/")
+    rec_folder = Path("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/Rec_CVS_TEST/")
+    fig_path = Path("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI_TEST/CVS/")
     if not os.path.exists(rec_folder):
         os.makedirs(rec_folder)
     # setup dictionaries for arteries error measurements
@@ -252,6 +252,7 @@ def main(config: DictConfig) -> None:
             #sys.exit()
             for sub in ["ref", "1", "2", "3"]:
                 if sub == "ref":
+                   
                     ### here create cows and solve, and dump ref
                     log_arteries = get_arteries_dict()
                     path_to_ref = con_path / sub
@@ -261,6 +262,12 @@ def main(config: DictConfig) -> None:
                         os.makedirs(fig)
 
                     path_to_ref = str(path_to_ref.resolve()) + "/"
+                    initial_run_ref = con_path / "initial_run_ref"
+                    initial_run_ref = str(initial_run_ref.resolve()) + "/"
+                    
+                    if not os.path.exists(initial_run_ref):
+                        os.makedirs(initial_run_ref)
+                    #continue
                     COWs = list(
                         COW(
                         model_surrogate=model_surrogate,
@@ -298,13 +305,12 @@ def main(config: DictConfig) -> None:
                     lambda_a0=config.inverse.lambda_a0,
                     )
 
-                    initial_run_ref = con_path / "initial_run_ref"
-                    initial_run_ref = str(initial_run_ref.resolve()) + "/"
-                    if not os.path.exists(initial_run_ref):
-                        os.makedirs(initial_run_ref)
+                    
 
                     
                     M_COWs.dump_ref_for_cvs(initial_run_ref)
+                    M_COWs.dump_latent(initial_run_ref)
+                    M_COWs.dump_RT(initial_run_ref)
                     L2 = M_COWs.get_L2()
                     L2_dict["ref"].append(L2)
                     M_COWs.dump_plots(fig)
@@ -355,14 +361,14 @@ def main(config: DictConfig) -> None:
                         normalizer_y,
                         normalizer_theta,
                         model_surrogate,
-                        config.inverse.lr,
+                        config.inverse.lr * 0.1,
                     )
                     M_COWs.solve_cvs(
                         max_iters=config.inverse.max_iters,
                         eps=config.inverse.eps,
                         batch_size=2,
                         lambda_mes=config.inverse.lambda_mes,
-                        lambda_mass=config.inverse.lambda_mass,
+                        lambda_mass=config.inverse.lambda_mass ,
                         lambda_pressure=config.inverse.lambda_pressure,
                         lambda_a0=config.inverse.lambda_a0,
                         lambda_p_ref=config.inverse.lambda_p_ref,
@@ -385,11 +391,14 @@ def main(config: DictConfig) -> None:
                     M_COWs.get_validation(log_save)
                     M_COWs.dump_validation(fig, log_save)
                     M_COWs.dump_reconstructed_u_bc_plots(fig)
+                    if config.log:
+                        wandb.log({f"rL2 {con_type}_{sub}": L2})
 
                     del COWs
         it += 1
         if it == 5:
-            break
+            #break
+            pass
 
     if config.log:
         for key, value in L2_dict.items():
