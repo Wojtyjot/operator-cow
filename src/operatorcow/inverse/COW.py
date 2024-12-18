@@ -105,18 +105,23 @@ class Artery(object):
                 )
                 if cvs:
                     #load latent from initial run
-                    self.u_bc_latent = (
-                        self.latent_bc.to(self.device).requires_grad_(True)
-                    )
+                    #self.u_bc_latent = (
+                    #    self.latent_bc.to(self.device).requires_grad_(True)
+                    #)
+                    pass
 
                 # print(self.u_bc.shape)
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
+                # ADDED NOISE TO MEASUREMENT
+                noise = torch.normal(0,2.5, self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().shape).to(self.device)
+                self.noise = noise
                 self.mesurement_value = (
                     self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().to(self.device)
+                    + noise #torch.normal(0,2.5, self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().shape).to(self.device) 
                 )
 
                 self.parameters = [self.u_bc_latent]
-                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze() + noise.cpu() 
                 if cvs:
                     # jeszcze trzeba zrobic a0 z r0
                     self.theta[29:47] = self.r0s
@@ -128,15 +133,24 @@ class Artery(object):
                 self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
 
             elif self.root:
+                # ADDED NOISE TO MEASUREMENT
+
+                noise = torch.normal(0,2.5, self.g.ndata["y"][0:100, 2].unsqueeze(-1).shape).to(self.device)
+                self.noise = noise
                 self.u_bc = (
                     self.g.ndata["y"][0:100, 2]
                     .unsqueeze(-1)
                     .to(self.device)
-                    .requires_grad_(True)
-                )
+                    #.requires_grad_(True) 
+                    + noise #torch.normal(0,2.5, self.g.ndata["y"][0:100, 2].unsqueeze(-1).shape).to(self.device) 
+               
+                ).requires_grad_(True)
+                #print(self.u_bc.shape)
+                #print(self.g.ndata["y"][0:100, 2].squeeze().shape)
+                #print(torch.normal(0,2.5, self.g.ndata["y"][0:100, 2].squeeze().shape).shape)
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 # self.parameters = [u0]
-                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze() + noise.squeeze().cpu()
                 self.parameters = None
                 if cvs:
                     # jeszcze trzeba zrobic a0 z r0
@@ -145,7 +159,7 @@ class Artery(object):
                 else:
                     self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
                 # self.a0 = self.g.ndata["y"][0::100, 1].to(self.device)
-                self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze())
+                self.set_true_u_in(self.g.ndata["y"][0:100, 2].squeeze() )
                 self.set_true_a_in(self.g.ndata["y"][0:100, 1].squeeze())
                 self.set_true_p_in(self.g.ndata["y"][0:100, 0].squeeze())
 
@@ -155,9 +169,10 @@ class Artery(object):
                 )
                 if cvs:
                     #load latent from initial run
-                    self.u_bc_latent = (
-                        self.latent_bc.to(self.device).requires_grad_(True)
-                    )
+                    #self.u_bc_latent = (
+                    #    self.latent_bc.to(self.device).requires_grad_(True)
+                    #)
+                    pass
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 self.parameters = [self.u_bc_latent]
                 self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze()
@@ -285,6 +300,20 @@ class Artery(object):
             return torch.cat((x, t, self.parameters[0]), dim=-1)
         else:
             return torch.cat((x, t, self.parameters[1]), dim=-1)
+        
+    def input_a0(self):
+        """
+        Function returns a0 initial condition
+        """
+        x = torch.linspace(0, self.L, 50).to(self.device).reshape(-1, 1)
+        #print(f"x shape = {x.shape}")
+        t = torch.zeros(50, 1).to(self.device).reshape(-1, 1)
+        #print(f"t shape = {t.shape}")
+        #print(self.a0.shape)
+        a0 = torch.cat((x, t, self.a0.reshape(-1,1)), dim=-1)
+        #print(f"a0 shape = {a0.shape}")
+        #print("CHUJUUJUJ")
+        return a0
 
     def get_inputs(
         self,
@@ -306,6 +335,10 @@ class Artery(object):
                 self.inputs_f[6],
             )
             # u0 = self.get_u0()
+            #print(f"a0 shape = {a0.shape}")
+            #a0 = self.input_a0()
+            #print(f"a0 shape_2 = {a0.shape}")
+            #print("CHUJ")
             in_bc = self.get_u_BC(
                 VANO_model=VANO_model, normalizer_u_bc=normalizer_u_bc, T=T
             )
@@ -353,6 +386,23 @@ class Artery(object):
         # plt.show()
         plt.close()
 
+    def dump_mesurement(self, fig_path: str):
+        """
+        Function dumps predicted and true value at mesurement point
+        """
+        plt.plot((self.mesurement_value).detach().cpu().numpy(), label="Noisy measurement", color="blue", linestyle=":")
+        plt.plot((self.mesurement_value - self.noise).detach().cpu().numpy(), label="Ground truth", color="black")
+        plt.plot(self.u_mesurement.detach().cpu().numpy(), label="Reconstructed", color="red", linestyle="--")
+        
+        plt.grid()
+        plt.title(f"Measurement and predicted velocity {self.name}")
+        plt.ylabel(r"$cm \cdot s^{-1}$")
+        plt.xlabel("Time step")
+        plt.legend()
+        plt.savefig(fig_path + f"/comparison_{self.name}_new.png")
+        plt.close()
+
+    
     def set_ROM_mesurement(self):
         """
         Function sets mesurement point for ROM model
@@ -725,14 +775,14 @@ class COW(object):
                 elif artery in [
                     "L_MCA",
                     "R_MCA",
-                    #"L_ACA_A1",
-                    #"R_ACA_A1",
-                    #"L_PCA_P1",
-                    #"R_PCA_P1",
-                    "L_ACA_A2",
-                    "R_ACA_A2",
-                    "L_PCA_P2",
-                    "R_PCA_P2",
+                    "L_ACA_A1",
+                    "R_ACA_A1",
+                    "L_PCA_P1",
+                    "R_PCA_P1",
+                    #"L_ACA_A2",
+                    #"R_ACA_A2",
+                    #"L_PCA_P2",
+                    #"R_PCA_P2",
                 ]:
                     latent_bc = np.load(
                     p_ref_path + artery + "_latent" + ".npy", allow_pickle=True
@@ -833,14 +883,14 @@ class COW(object):
                 elif artery in [
                     "L_MCA",
                     "R_MCA",
-                    #"L_ACA_A1",
-                    #"R_ACA_A1",
-                    #"L_PCA_P1",
-                    #"R_PCA_P1", #change
-                    "L_ACA_A2",
-                    "R_ACA_A2",
-                    "L_PCA_P2",
-                    "R_PCA_P2",
+                    "L_ACA_A1",
+                    "R_ACA_A1",
+                    "L_PCA_P1",
+                    "R_PCA_P1", #change
+                    #"L_ACA_A2",
+                    #"R_ACA_A2",
+                    #"L_PCA_P2",
+                    #"R_PCA_P2",
                 ]:
                     self.arteries.append(
                         Artery(
@@ -1060,10 +1110,12 @@ class COW(object):
                 u_p = self.normalizer_theta.transform(u_p, inverse=False)
 
                 # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
-
+                #import time
+                #st = time.time()
                 out = self.model_surrogate(
                     g, u_p, g_u
                 )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
+                #print(f"forward pass time: {time.time()-st}")
                 out = self.normalizer_y.transform(out, inverse=True)
                 out = out.reshape(len(batch_idx), -1, 3)  # mam nadzieje ze to dobrze
 
@@ -1087,10 +1139,12 @@ class COW(object):
                 u_p = self.normalizer_theta.transform(u_p, inverse=False)
 
                 # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
-
+               # import time
+                #st = time.time()
                 out = self.model_surrogate(
                     g, u_p, g_u
                 )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
+                #print(f"forward pass time: {time.time()-st}")
                 out = self.normalizer_y.transform(out, inverse=True)
                 out = out.reshape(batch_size, -1, 3)  # mam nadzieje ze to dobrze
 
@@ -1436,7 +1490,26 @@ class COW(object):
                 pred[i, :, 1].detach().cpu().numpy(),
             )
 
-
+    def mass_conservation(self):
+        """
+        Function penalizes difference between mass enetring and leavig cow
+        """
+        Q_in = None
+        Q_out = None
+        for artery in self.arteries:
+            if artery.is_root():
+                if Q_in is None:
+                    Q_in = artery.get_u_in() * artery.get_a_in()
+                else:
+                    Q_in += artery.get_u_in() * artery.get_a_in()
+            elif artery.is_outlet():
+                if Q_out is None:
+                    Q_out = artery.get_u_out() * artery.get_a_out()
+                else:
+                    Q_out += artery.get_u_out() * artery.get_a_out()
+        return torch.mean(torch.square(Q_in - Q_out))
+                
+            
     def propagate_RT(self):
         """
         Function passes RT value to arteries
@@ -1939,6 +2012,14 @@ class COW(object):
             plt.savefig(os.path.join(path, f"{artery.name}_ROM.png"))
             plt.close()
 
+    def dump_mesurement_plots(self, path: str):
+        """
+        Function creates plots of mesurement
+        """
+        for artery in self.arteries:
+            if artery.has_mesurement():
+                artery.dump_mesurement(path)
+
     def create_subsegments(self , a: float, b: float, n: int) -> List[Tuple[float, float]]:
         """
         Subdivide segment [a, b] into n disjoint subsegments.
@@ -2093,7 +2174,7 @@ class COW(object):
         """
         for artery in self.arteries:
             u_in = artery.get_u_bc_rec().detach().cpu().numpy()
-            u_in_true = artery.get_true_u_in().detach().cpu().numpy()
+            u_in_true = artery.u_bc_true.detach().cpu().numpy()
 
             fig, axs = plt.subplots(1, 1, figsize=(10, 10))
             axs.plot(u_in, label="Rec")
@@ -2394,10 +2475,12 @@ class Multiple_COWs(object):
             u_p = self.normalizer_theta.transform(u_p, inverse=False)
 
             # g, u_p, g_u = g.to(self.device), u_p.to(self.device), g_u.to(self.device)
-
+            #import time
+           # st = time.time()
             out = self.model_surrogate(
                 self.g, u_p, g_u
             )  # trzeba zrobic reshape bo jest [bs * n_nodes, 3]
+            #print(f"forward pass time = {time.time() - st}")
             out = self.normalizer_y.transform(out, inverse=True)
             out = out.reshape(batch_size, 18, -1, 3)  # mam nadzieje ze to dobrze
 
@@ -2628,6 +2711,7 @@ class Multiple_COWs(object):
                         self.losses[idx_cow] += (
                             lambda_p_ref * self.COWs[idx_cow].compute_pressure_loss()
                         )
+                        self.losses[idx_cow] +=  10.0* self.COWs[idx_cow].mass_conservation()
                         if idx_cow != max(idx):
                             self.losses[idx_cow].backward(
                                 retain_graph=True, inputs=self.COWs[idx_cow].p_RT
@@ -2656,6 +2740,7 @@ class Multiple_COWs(object):
                         self.losses[idx_cow] += (
                             lambda_p_ref * self.COWs[idx_cow].compute_pressure_loss()
                         )
+                        self.losses[idx_cow] +=  10.0* self.COWs[idx_cow].mass_conservation()
                         if idx_cow != max(idx):
                             self.losses[idx_cow].backward(
                                 retain_graph=True, inputs=self.COWs[idx_cow].p_MES
@@ -2682,6 +2767,7 @@ class Multiple_COWs(object):
                         self.losses[idx_cow] += (
                             lambda_p_ref * self.COWs[idx_cow].compute_pressure_loss()
                         )
+                        self.losses[idx_cow] +=  10.0* self.COWs[idx_cow].mass_conservation()
                         if idx_cow != max(idx):
                             self.losses[idx_cow].backward(
                                 retain_graph=True, inputs=self.COWs[idx_cow].p_NON_MES
@@ -2711,6 +2797,7 @@ class Multiple_COWs(object):
                         self.losses[idx_cow] += (
                             lambda_p_ref * self.COWs[idx_cow].compute_pressure_loss()
                         )
+                        self.losses[idx_cow] +=  1.0* self.COWs[idx_cow].mass_conservation()
 
                         try:
                             if idx_cow != max(idx):
@@ -2732,6 +2819,7 @@ class Multiple_COWs(object):
                     self.COWs[idx_cow].propagate_RT()
                     self.COWs[idx_cow].update_CT()
                     self.COWs[idx_cow].propagate_CT()
+                    self.COWs[idx_cow].propagate_r0s()
                     # torch.cuda.empty_cache()
                     # gc.collect()
             it += 1
@@ -2816,3 +2904,6 @@ class Multiple_COWs(object):
         else:
             for idx, cow in enumerate(self.COWs):
                 cow.dump_RT(path + f"/COW_{idx}")
+
+    def dump_mesurement_plots(self, path):
+        self.COWs[self.best_idx].dump_mesurement_plots(path)

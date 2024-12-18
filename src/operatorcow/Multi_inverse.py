@@ -141,9 +141,17 @@ def main(config: DictConfig) -> None:
     for subfolder in val_path.iterdir():
         if subfolder.is_dir():
             arteries_log_save = get_arteries_dict()
-            fig_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE/" + str(
+            fig_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE_NOISE/" + str(
                 subfolder.name
             )
+            rec_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE_NOISE_rec_sol/" + str(
+                subfolder.name
+            )
+            rec_path = Path(rec_path)
+
+            if not Path(rec_path).exists():
+                Path(rec_path).mkdir(parents=True, exist_ok=True)
+
             if not Path(fig_path).exists():
                 Path(fig_path).mkdir(parents=True, exist_ok=True)
 
@@ -197,6 +205,8 @@ def main(config: DictConfig) -> None:
             M_COWs.dump_statistics(fig_path)
             M_COWs.dump_validation(fig_path, arteries_log_save)
             M_COWs.dump_reconstructed_u_bc_plots(fig_path)
+            M_COWs.dump_solutions(rec_path)
+            M_COWs.dump_mesurement_plots(fig_path)
 
             print(f"Validation data: {subfolder}")
             print(L2)
@@ -205,7 +215,7 @@ def main(config: DictConfig) -> None:
             wandb.log({"rL2": L2})
 
             if i == 30:
-                break
+                pass
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
     L2s = np.array(L2s)

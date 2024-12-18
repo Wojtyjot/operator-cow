@@ -252,6 +252,7 @@ def main(config: DictConfig) -> None:
             #sys.exit()
             for sub in ["ref", "1", "2", "3"]:
                 if sub == "ref":
+                    continue
                    
                     ### here create cows and solve, and dump ref
                     log_arteries = get_arteries_dict()
@@ -328,6 +329,9 @@ def main(config: DictConfig) -> None:
                 
                 else:
                     # here solve cvs case and dump solutions
+                    initial_run_ref = con_path / "initial_run_ref"
+                    initial_run_ref = str(initial_run_ref.resolve()) + "/"
+
                     path_to_cvs = con_path / sub
                     fig = fig_path / con_type / cow / sub
                     fig = str(fig.resolve()) + "/"
@@ -361,16 +365,16 @@ def main(config: DictConfig) -> None:
                         normalizer_y,
                         normalizer_theta,
                         model_surrogate,
-                        config.inverse.lr * 0.1,
+                        config.inverse.lr ,
                     )
                     M_COWs.solve_cvs(
                         max_iters=config.inverse.max_iters,
                         eps=config.inverse.eps,
                         batch_size=2,
                         lambda_mes=config.inverse.lambda_mes,
-                        lambda_mass=config.inverse.lambda_mass ,
+                        lambda_mass=config.inverse.lambda_mass * 100 ,
                         lambda_pressure=config.inverse.lambda_pressure,
-                        lambda_a0=config.inverse.lambda_a0,
+                        lambda_a0=0,
                         lambda_p_ref=config.inverse.lambda_p_ref,
                     )
                     

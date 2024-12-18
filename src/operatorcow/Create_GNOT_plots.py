@@ -11,6 +11,7 @@ from log_plots import (
     create_plot_VANO_paper,
     decode_artery,
     plot_pred_paper,
+    VANO_paper_full,
 )
 from models.cgpt import CGPT
 from models.mmgpt import GNOT
@@ -69,7 +70,7 @@ def main(config: DictConfig) -> None:
     )
     test_loader = MIODataLoader(
         dataset_test,
-        batch_size=1,
+        batch_size=16, # FOR VANO ONLY !!! or 512?
         shuffle=True,
         drop_last=False,
     )
@@ -142,20 +143,28 @@ def main(config: DictConfig) -> None:
     VANO_model.to(device)
     VANO_model.eval()
     if False:
-        create_plot_VANO_paper(
-            model=VANO_model,
-            device=device,
-            normalizer_up=normalizer_up,
-            normalizer_y=normalizer,
-            path=config.plots.path,
-        )
-        result = compute_statistics_VANO_paper(
+        VANO_paper_full(
             model=VANO_model,
             device=device,
             normalizer_up=normalizer_up,
             normalizer_y=normalizer,
             save_path=config.plots.path,
+            test_loader=test_loader,
         )
+        #create_plot_VANO_paper(
+        #    model=VANO_model,
+        #    device=device,
+        #    normalizer_up=normalizer_up,
+        #    normalizer_y=normalizer,
+        #    path=config.plots.path,
+        #)
+        #result = compute_statistics_VANO_paper(
+        #    model=VANO_model,
+        #    device=device,
+        #    normalizer_up=normalizer_up,
+        #    normalizer_y=normalizer,
+        #    save_path=config.plots.path,
+        #)
     else:
 
         model.eval()
