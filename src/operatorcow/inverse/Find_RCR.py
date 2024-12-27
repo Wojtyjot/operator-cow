@@ -67,7 +67,7 @@ def compute_norm(x, x_pred):
     """
     Function computes L2 norm
     """
-    return np.sqrt(np.sum((x - x_pred) ** 2)) / np.sqrt(np.sum(x**2))
+    return np.sqrt(np.sum((x - x_pred.squeeze()) ** 2)) / np.sqrt(np.sum(x**2))
 
 
 def search_params(R, C, t, p_exact, p, nn, R1, p_inf, T, aa, bb):
@@ -177,11 +177,12 @@ def find_windkessel(cow, num_iters: int):
     out_pred_dict = cow.get_outlet_predictions(True)
 
     for key, value in out_pred_dict.items():
-        A, u, p, t = value
+        u, A, p, t = value
 
-        A, u, p, t = (
-            A.squeeze(),
+        u, A, p, t = (
             u.squeeze(),
+            A.squeeze(),
+           
             p.squeeze(),
             t.squeeze(),
         )
@@ -193,7 +194,9 @@ def find_windkessel(cow, num_iters: int):
         # print(Q.shape)
         NN = Q.shape[0]
         z = compute_characteristic_impedance(cow.get_artery(int(key)), rho)
-        # print(z)
+        print(key)
+        print(z)
+        print(T)
 
         # compute fft
         aa, bb = get_fft(Q, T)
@@ -206,8 +209,8 @@ def find_windkessel(cow, num_iters: int):
         import time
 
         nn = 10
-        lb = np.array([14.0, -29.0])
-        ub = np.array([29.0, -14.0])
+        lb = np.array([19.0, -19.0])
+        ub = np.array([29.0, -29.0])
         R_prop = np.exp(np.linspace(lb[0], ub[0], nn))
         C_prop = np.exp(np.linspace(lb[1], ub[1], nn))
         R_temp, C_temp = np.meshgrid(R_prop, C_prop)

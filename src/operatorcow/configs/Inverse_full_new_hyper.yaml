@@ -29,7 +29,7 @@ data:
   batch_size: 18
 
 
-log: True
+log: False
 
 model:
   name: GNOT
@@ -63,7 +63,7 @@ inverse:
   lambda_pressure: 0.00000001
   lambda_mes: 0.1
   lambda_a0: 100.0
-  max_iters: 3000
+  max_iters: 10
   eps: 0.000006
   batch_size: 18
   lr: 0.1

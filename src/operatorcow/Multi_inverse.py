@@ -26,6 +26,7 @@ from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
 import pickle
+from inverse.Find_RCR import find_windkessel
 
 # from operatorcow.inverse.inverse import optimize_input_test
 
@@ -196,6 +197,14 @@ def main(config: DictConfig) -> None:
                 lambda_a0=config.inverse.lambda_a0,
             )
             print(f"Time: {time.time() - st}")
+
+            # get best cow
+            R2, C, Z = find_windkessel(M_COWs.get_best(), 5)
+            print("for subfolder: ", subfolder)
+            print("R2: ", R2)
+            print("C: ", C)
+            print("Z: ", Z)
+            sys.exit()
             arteries_log = M_COWs.get_validation(arteries_log)
             arteries_log_save = M_COWs.get_validation(arteries_log_save)
             L2 = M_COWs.get_L2()

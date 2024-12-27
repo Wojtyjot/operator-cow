@@ -2236,8 +2236,8 @@ class COW(object):
                 # need to transfrom to si units
                 if true:
                     out[idx] = (
-                        artery.get_true_u_in().detach().cpu().numpy() * 1e-4,
-                        artery.get_true_a_in().detach().cpu().numpy() * 1e-2,
+                        artery.get_true_u_in().detach().cpu().numpy() * 1e-2,
+                        artery.get_true_a_in().detach().cpu().numpy() * 1e-4,
                         artery.get_true_p_in().detach().cpu().numpy() / 10,
                         artery.get_t().detach().cpu().numpy(),
                     )
@@ -2907,3 +2907,6 @@ class Multiple_COWs(object):
 
     def dump_mesurement_plots(self, path):
         self.COWs[self.best_idx].dump_mesurement_plots(path)
+
+    def get_best(self) :
+        return self.COWs[self.best_idx]
