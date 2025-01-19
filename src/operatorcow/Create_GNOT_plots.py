@@ -44,7 +44,7 @@ def main(config: DictConfig) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load the data
-    
+
     if True:
         dataset_train = COWDataset_GANO(config.data.path_train)
         dataset_test = COWDataset_GANO(config.data.path_test)
@@ -54,16 +54,15 @@ def main(config: DictConfig) -> None:
         dataset_test = COWDataset(config.data.path_test)
     torch.manual_seed(config.seed)
     # save normalizer to renormalize data for plotting and evaluation
-    # for vano only normalizer_u_bc = normalizer_y 
+    # for vano only normalizer_u_bc = normalizer_y
     normalizer_u_bc = dataset_train.y_normalizer.to(device)
     print(f"normalizer_u_bc mean: {normalizer_u_bc.mean}")
     print(f"normalizer_u_bc std: {normalizer_u_bc.std}")
     print(f"normalizer_u_bc mean: {normalizer_u_bc}")
-    #sys.exit()
+    # sys.exit()
     normalizer = dataset_train.y_normalizer.to(device)
     normalizer_up = dataset_test.up_normalizer.to(device)
     normalizer_x = dataset_train.x_normalizer.to(device)
-    
 
     train_loader = MIODataLoader(
         dataset_train,
@@ -73,7 +72,7 @@ def main(config: DictConfig) -> None:
     )
     test_loader = MIODataLoader(
         dataset_test,
-        batch_size=16, # FOR VANO ONLY !!! or 512?
+        batch_size=16,  # FOR VANO ONLY !!! or 512?
         shuffle=True,
         drop_last=False,
     )
@@ -142,7 +141,7 @@ def main(config: DictConfig) -> None:
     )
     VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
 
-    #model.load_state_dict(torch.load(config.model.surrogate_weights_path))
+    # model.load_state_dict(torch.load(config.model.surrogate_weights_path))
     VANO_model.to(device)
     VANO_model.eval()
     if True:
@@ -154,20 +153,20 @@ def main(config: DictConfig) -> None:
             save_path=config.plots.path,
             test_loader=test_loader,
         )
-        #create_plot_VANO_paper(
+        # create_plot_VANO_paper(
         #    model=VANO_model,
         #    device=device,
         #    normalizer_up=normalizer_up,
         #    normalizer_y=normalizer,
         #    path=config.plots.path,
-        #)
-        #result = compute_statistics_VANO_paper(
+        # )
+        # result = compute_statistics_VANO_paper(
         #    model=VANO_model,
         #    device=device,
         #    normalizer_up=normalizer_up,
         #    normalizer_y=normalizer,
         #    save_path=config.plots.path,
-        #)
+        # )
     else:
 
         model.eval()

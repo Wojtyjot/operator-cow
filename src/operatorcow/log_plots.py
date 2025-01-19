@@ -199,63 +199,124 @@ def plot_pred_paper(
     ]
     """
     print("Plotting")
-    fig, axs = plt.subplots(2, 2, figsize=(7.48/2, 9.45/2), dpi=300)
-    #plt.xticks(fontsize=30)
-    #plt.xticks(fontsize=8)
-    #plt.yticks(fontsize=30)
-    #fig.suptitle(f"Predictions vs Ground truth for {artery}")
-    
-    axs[0, 0].plot(unit_to_mmHg(ground_truth[:100, 0]), label="Ground truth", color="black", linewidth=1)
-    axs[0, 0].plot(unit_to_mmHg(predictions[:100, 0]), label="Predicted", color="red", linestyle="--", linewidth=1)
+    fig, axs = plt.subplots(2, 2, figsize=(7.48 / 2, 9.45 / 2), dpi=300)
+    # plt.xticks(fontsize=30)
+    # plt.xticks(fontsize=8)
+    # plt.yticks(fontsize=30)
+    # fig.suptitle(f"Predictions vs Ground truth for {artery}")
+
+    axs[0, 0].plot(
+        unit_to_mmHg(ground_truth[:100, 0]),
+        label="Ground truth",
+        color="black",
+        linewidth=1,
+    )
+    axs[0, 0].plot(
+        unit_to_mmHg(predictions[:100, 0]),
+        label="Predicted",
+        color="red",
+        linestyle="--",
+        linewidth=1,
+    )
     axs[0, 0].set_title("Pressure", fontsize=7)
     axs[0, 0].set_ylabel("mmHg", fontsize=7)
     axs[0, 0].set_xlabel("Time step", fontsize=7)
     axs[0, 0].tick_params(axis="x", labelsize=7)
     axs[0, 0].tick_params(axis="y", labelsize=7)
-    plt.setp(axs[0,0].get_xticklabels(), fontsize=7,)
-    plt.setp(axs[0,0].get_yticklabels(), fontsize=7,)
+    plt.setp(
+        axs[0, 0].get_xticklabels(),
+        fontsize=7,
+    )
+    plt.setp(
+        axs[0, 0].get_yticklabels(),
+        fontsize=7,
+    )
     # set legend size
-
 
     axs[0, 0].legend(fontsize=5)
     axs[0, 0].grid()
 
-    axs[0, 1].plot(ground_truth[:100, 1], label="Ground truth", color="black",  linewidth=1)
-    axs[0, 1].plot(predictions[:100, 1], label="Predicted", color="red", linestyle="--", linewidth=1)
-   
+    axs[0, 1].plot(
+        ground_truth[:100, 1], label="Ground truth", color="black", linewidth=1
+    )
+    axs[0, 1].plot(
+        predictions[:100, 1],
+        label="Predicted",
+        color="red",
+        linestyle="--",
+        linewidth=1,
+    )
+
     axs[0, 1].set_title("Area", fontsize=7)
     axs[0, 1].set_ylabel(r"$cm^2$", fontsize=7)
     axs[0, 1].set_xlabel("Time step", fontsize=7)
     axs[0, 1].tick_params(axis="x", labelsize=7)
     axs[0, 1].tick_params(axis="y", labelsize=7)
-    plt.setp(axs[0,1].get_xticklabels(), fontsize=7,)
-    plt.setp(axs[0,1].get_yticklabels(), fontsize=7,)
+    plt.setp(
+        axs[0, 1].get_xticklabels(),
+        fontsize=7,
+    )
+    plt.setp(
+        axs[0, 1].get_yticklabels(),
+        fontsize=7,
+    )
     org_lim = axs[0, 1].get_ylim()
     axs[0, 1].set_ylim([org_lim[0] - org_lim[0] * 0.10, org_lim[1] + org_lim[1] * 0.10])
     axs[0, 1].legend(fontsize=5)
     axs[0, 1].grid()
-    axs[1, 0].plot(ground_truth[:100, 2], label="Ground truth", color="black", linewidth=1)
-    axs[1, 0].plot(predictions[:100, 2], label="Predicted", color="red", linestyle="--", linewidth=1)
-    
+    axs[1, 0].plot(
+        ground_truth[:100, 2], label="Ground truth", color="black", linewidth=1
+    )
+    axs[1, 0].plot(
+        predictions[:100, 2],
+        label="Predicted",
+        color="red",
+        linestyle="--",
+        linewidth=1,
+    )
+
     axs[1, 0].set_title("Velocity", fontsize=7)
     axs[1, 0].set_ylabel(r"$ cm \cdot s^{-1} $", fontsize=7)
     axs[1, 0].set_xlabel("Time step", fontsize=7)
     axs[1, 0].tick_params(axis="x", labelsize=7)
     axs[1, 0].tick_params(axis="y", labelsize=7)
-    plt.setp(axs[1,0].get_xticklabels(), fontsize=7,)
-    plt.setp(axs[1,0].get_yticklabels(), fontsize=7,)
+    plt.setp(
+        axs[1, 0].get_xticklabels(),
+        fontsize=7,
+    )
+    plt.setp(
+        axs[1, 0].get_yticklabels(),
+        fontsize=7,
+    )
     axs[1, 0].legend(fontsize=5)
     axs[1, 0].grid()
-    axs[1, 1].plot(ground_truth[:100, 2] * ground_truth[:100, 1], label="Ground truth", color="black", linewidth=1)
-    axs[1, 1].plot(predictions[:100, 2] * predictions[:100, 1], label="Predicted", color="red", linestyle="--", linewidth=1)
-    
+    axs[1, 1].plot(
+        ground_truth[:100, 2] * ground_truth[:100, 1],
+        label="Ground truth",
+        color="black",
+        linewidth=1,
+    )
+    axs[1, 1].plot(
+        predictions[:100, 2] * predictions[:100, 1],
+        label="Predicted",
+        color="red",
+        linestyle="--",
+        linewidth=1,
+    )
+
     axs[1, 1].set_title("Flow", fontsize=7)
     axs[1, 1].set_ylabel(r"$cm^3 \cdot s^{-1}$", fontsize=7)
     axs[1, 1].set_xlabel("Time step", fontsize=7)
     axs[1, 1].tick_params(axis="x", labelsize=7)
     axs[1, 1].tick_params(axis="y", labelsize=7)
-    plt.setp(axs[1,1].get_xticklabels(), fontsize=7,)
-    plt.setp(axs[1,1].get_yticklabels(), fontsize=7,)
+    plt.setp(
+        axs[1, 1].get_xticklabels(),
+        fontsize=7,
+    )
+    plt.setp(
+        axs[1, 1].get_yticklabels(),
+        fontsize=7,
+    )
     axs[1, 1].legend(fontsize=5)
     axs[1, 1].grid()
 
@@ -311,7 +372,7 @@ def create_plot_VANO_paper(
             .repeat(512, 1)
         )
         condition = normalizer_up.transform(condition, inverse=False)
-        z = torch.randn(512, model.get_latent_dim()).to(device) # sample true datase
+        z = torch.randn(512, model.get_latent_dim()).to(device)  # sample true datase
         synthetic = model.decode(z, condition)
         synthetic = synthetic.reshape(512, 100, 1)
         synthetic = normalizer_y.transform(synthetic, inverse=True)
@@ -324,7 +385,7 @@ def create_plot_VANO_paper(
         axs[idx].tick_params(axis="y", labelsize=30)
         axs[idx].set_xlabel("Time step", fontsize=30)
         axs[idx].set_ylabel(r"$cm \cdot s^{-1}$", fontsize=30)
-        
+
         axs[idx].grid()
 
     plt.tight_layout()
@@ -398,7 +459,7 @@ def VANO_paper_full(
     normalizer_y: torch.nn.Module,
     save_path: str,
     test_loader: torch.utils.data.DataLoader,
-    ):
+):
     """
     Function for creating plots and computing statistics from trainde vano model
     """
@@ -444,18 +505,20 @@ def VANO_paper_full(
             # get artery
             mean, log_var, z, out = model(u_bc, condition)
 
-            z_samples = mean.unsqueeze(0) + torch.exp(log_var/2).unsqueeze(0) * torch.rand(z.shape, device=z.device)
+            z_samples = mean.unsqueeze(0) + torch.exp(log_var / 2).unsqueeze(
+                0
+            ) * torch.rand(z.shape, device=z.device)
             # loop over samples plot and compute statistics
             z_samples = z_samples.view(-1, z_samples.shape[-1])
             condition = condition.view(-1, condition.shape[-1])
             out = model.decode(z_samples, condition)
-            #print(f"out shape: {out.shape}")
-            #print(f"condition shape: {condition.shape}")
+            # print(f"out shape: {out.shape}")
+            # print(f"condition shape: {condition.shape}")
             out = normalizer_y.transform(out, inverse=True)
             u_bc = normalizer_y.transform(u_bc, inverse=True)
-            #print(f"out shape: {out.shape}")
-            #print(f"u_bc shape: {u_bc.shape}")
-            
+            # print(f"out shape: {out.shape}")
+            # print(f"u_bc shape: {u_bc.shape}")
+
             for i in range(condition.shape[0]):
                 artery = decode_artery(condition[i].cpu().numpy())
                 true = u_bc[i].reshape(1, -1)
@@ -464,13 +527,12 @@ def VANO_paper_full(
                     results[artery]["true"].append(true)
                     results[artery]["pred"].append(pred)
 
-
-    # plot samples and compute statistics 
+    # plot samples and compute statistics
     statistics_true = {}
     statistics_pred = {}
-    fig_1, axs_1 = plt.subplots(2, 5, figsize=(7.48, 9.45/3), dpi=300)
+    fig_1, axs_1 = plt.subplots(2, 5, figsize=(7.48, 9.45 / 3), dpi=300)
     axs_1 = axs_1.flatten()
-    fig_2, axs_2 = plt.subplots(2, 5, figsize=(7.48, 9.45/3), dpi=300)
+    fig_2, axs_2 = plt.subplots(2, 5, figsize=(7.48, 9.45 / 3), dpi=300)
     axs_2 = axs_2.flatten()
     for idx, artery in enumerate(arteries):
         print(artery)
@@ -482,7 +544,7 @@ def VANO_paper_full(
         mfv_std = torch.std(mfv)
         pi = torch.mean(pi)
         mfv = torch.mean(mfv)
-        
+
         statistics_true[artery] = {
             "min": min,
             "max": max,
@@ -512,48 +574,72 @@ def VANO_paper_full(
 
         # plot samples
         for i in range(len(results[artery]["true"]) - 1):
-            #print(results[artery]["true"][i][0].shape)
-            #import sys
-            #sys.exit()
-            axs_1[idx].plot(results[artery]["true"][i][0].cpu().numpy(), color="gray", alpha=0.2, linewidth=0.7)
-            axs_2[idx].plot(results[artery]["pred"][i][0].cpu().numpy(), color="gray", alpha=0.2, linewidth=0.7)
-        
-        axs_1[idx].plot(results[artery]["true"][-1][0].cpu().numpy(), color="black", alpha=1, linewidth=0.7)
+            # print(results[artery]["true"][i][0].shape)
+            # import sys
+            # sys.exit()
+            axs_1[idx].plot(
+                results[artery]["true"][i][0].cpu().numpy(),
+                color="gray",
+                alpha=0.2,
+                linewidth=0.7,
+            )
+            axs_2[idx].plot(
+                results[artery]["pred"][i][0].cpu().numpy(),
+                color="gray",
+                alpha=0.2,
+                linewidth=0.7,
+            )
+
+        axs_1[idx].plot(
+            results[artery]["true"][-1][0].cpu().numpy(),
+            color="black",
+            alpha=1,
+            linewidth=0.7,
+        )
         axs_1[idx].set_title(artery_mapping[artery], fontsize=7)
         axs_1[idx].set_xlabel("Time step", fontsize=7)
         axs_1[idx].set_ylabel(r"$cm \cdot s^{-1}$", fontsize=7)
         axs_1[idx].tick_params(axis="x", labelsize=7)
         axs_1[idx].tick_params(axis="y", labelsize=7)
         axs_1[idx].grid()
-        plt.setp(axs_1[idx].get_xticklabels(), fontsize=7,)
-        plt.setp(axs_1[idx].get_yticklabels(), fontsize=7,)
+        plt.setp(
+            axs_1[idx].get_xticklabels(),
+            fontsize=7,
+        )
+        plt.setp(
+            axs_1[idx].get_yticklabels(),
+            fontsize=7,
+        )
 
-        axs_2[idx].plot(results[artery]["pred"][-1][0].cpu().numpy(), color="black", alpha=1, linewidth=0.7)
+        axs_2[idx].plot(
+            results[artery]["pred"][-1][0].cpu().numpy(),
+            color="black",
+            alpha=1,
+            linewidth=0.7,
+        )
         axs_2[idx].set_title(artery_mapping[artery], fontsize=7)
         axs_2[idx].set_xlabel("Time step", fontsize=7)
         axs_2[idx].set_ylabel(r"$cm \cdot s^{-1}$", fontsize=7)
         axs_2[idx].tick_params(axis="x", labelsize=7)
         axs_2[idx].tick_params(axis="y", labelsize=7)
         axs_2[idx].grid()
-        plt.setp(axs_2[idx].get_xticklabels(), fontsize=7,)
-        plt.setp(axs_2[idx].get_yticklabels(), fontsize=7,)
+        plt.setp(
+            axs_2[idx].get_xticklabels(),
+            fontsize=7,
+        )
+        plt.setp(
+            axs_2[idx].get_yticklabels(),
+            fontsize=7,
+        )
     fig_1.tight_layout()
     fig_2.tight_layout()
     fig_1.savefig(os.path.join(save_path, "VANO_samples_true_paper_test.png"))
     fig_2.savefig(os.path.join(save_path, "VANO_samples_pred_paper_test.png"))
 
-    
-
-            
-    
-    
-    
     # save statistcs to csv file
     df_true = pd.DataFrame(statistics_true)
     df_true.to_csv(f"{save_path}/statistics_true_VANO_new.csv")
     df_pred = pd.DataFrame(statistics_pred)
     df_pred.to_csv(f"{save_path}/statistics_pred_VANO_new.csv")
 
-
-        # plot samples
-        
+    # plot samples

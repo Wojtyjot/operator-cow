@@ -182,7 +182,6 @@ def find_windkessel(cow, num_iters: int):
         u, A, p, t = (
             u.squeeze(),
             A.squeeze(),
-           
             p.squeeze(),
             t.squeeze(),
         )

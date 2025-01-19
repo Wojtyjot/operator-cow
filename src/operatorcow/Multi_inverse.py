@@ -37,7 +37,9 @@ OmegaConf.register_new_resolver(
 )
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="Inverse_full_new_hyper")
+@hydra.main(
+    version_base=None, config_path="configs", config_name="Inverse_full_new_hyper"
+)
 def main(config: DictConfig) -> None:
 
     if config.log:
@@ -62,29 +64,121 @@ def main(config: DictConfig) -> None:
     #    mean=torch.Tensor([[0.5, 0.5]]), std=torch.Tensor([[0.2945, 0.2916]])
     # )
     normalizer_y = UnitTransformer_2(
-        mean=torch.Tensor([[1.1976e+05, 6.5500e-02, 3.1310e+01]]),
-        std=torch.Tensor([[1.8099e+04, 5.1532e-02, 3.0624e+01]]),
+        mean=torch.Tensor([[1.1976e05, 6.5500e-02, 3.1310e01]]),
+        std=torch.Tensor([[1.8099e04, 5.1532e-02, 3.0624e01]]),
     )
     normalizer_theta = UnitTransformer_2(
         mean=torch.Tensor(
-           [[0.0000e+00, 1.1111e-01, 5.5556e-02, 1.1111e-01, 1.1111e-01, 1.1111e-01,1.1111e-01, 1.1111e-01, 1.1111e-01, 5.5556e-02, 1.1111e-01, 1.7662e+01,
-         1.7706e+01, 2.9100e+00, 5.0039e-01, 5.0072e-01, 1.5065e+00, 1.4986e+00,
-         2.4043e+00, 2.3981e+00, 1.1987e+00, 1.2037e+00, 4.9940e-01, 4.9961e-01,
-         3.3058e+00, 3.3002e+00, 2.9983e-01, 4.6017e+00, 4.5875e+00, 1.9644e-01,
-         1.9959e-01, 1.6195e-01, 1.9981e-01, 2.0124e-01, 7.4259e-02, 7.2752e-02,
-         1.4357e-01, 1.4450e-01, 1.1695e-01, 1.1656e-01, 1.0671e-01, 1.0731e-01,
-         1.2332e-01, 1.2274e-01, 7.3721e-02, 1.0860e-01, 1.0854e-01, 6.9456e+01,
-         1.1287e+08, 1.2119e-08]]
+            [
+                [
+                    0.0000e00,
+                    1.1111e-01,
+                    5.5556e-02,
+                    1.1111e-01,
+                    1.1111e-01,
+                    1.1111e-01,
+                    1.1111e-01,
+                    1.1111e-01,
+                    1.1111e-01,
+                    5.5556e-02,
+                    1.1111e-01,
+                    1.7662e01,
+                    1.7706e01,
+                    2.9100e00,
+                    5.0039e-01,
+                    5.0072e-01,
+                    1.5065e00,
+                    1.4986e00,
+                    2.4043e00,
+                    2.3981e00,
+                    1.1987e00,
+                    1.2037e00,
+                    4.9940e-01,
+                    4.9961e-01,
+                    3.3058e00,
+                    3.3002e00,
+                    2.9983e-01,
+                    4.6017e00,
+                    4.5875e00,
+                    1.9644e-01,
+                    1.9959e-01,
+                    1.6195e-01,
+                    1.9981e-01,
+                    2.0124e-01,
+                    7.4259e-02,
+                    7.2752e-02,
+                    1.4357e-01,
+                    1.4450e-01,
+                    1.1695e-01,
+                    1.1656e-01,
+                    1.0671e-01,
+                    1.0731e-01,
+                    1.2332e-01,
+                    1.2274e-01,
+                    7.3721e-02,
+                    1.0860e-01,
+                    1.0854e-01,
+                    6.9456e01,
+                    1.1287e08,
+                    1.2119e-08,
+                ]
+            ]
         ),
         std=torch.Tensor(
-           [[1.0000e-08, 3.1427e-01, 2.2906e-01, 3.1427e-01, 3.1427e-01, 3.1427e-01, 3.1427e-01, 3.1427e-01, 3.1427e-01, 2.2906e-01, 3.1427e-01, 1.3492e+00,
-         1.3395e+00, 2.2235e-01, 3.6863e-02, 3.6870e-02, 1.1427e-01, 1.1470e-01,
-         1.7390e-01, 1.7464e-01, 9.0034e-02, 8.7888e-02, 3.8154e-02, 3.7272e-02,
-         2.4628e-01, 2.4983e-01, 2.2109e-02, 3.4318e-01, 3.4641e-01, 3.4018e-02,
-         3.5886e-02, 3.1958e-02, 3.9021e-02, 3.9338e-02, 1.3626e-02, 1.4379e-02,
-         2.6881e-02, 2.7712e-02, 2.2955e-02, 2.3193e-02, 2.1227e-02, 2.1547e-02,
-         2.1564e-02, 2.2400e-02, 1.4715e-02, 1.8198e-02, 1.8286e-02, 5.7472e+00,
-         1.6219e+07, 1.1749e-08]]
+            [
+                [
+                    1.0000e-08,
+                    3.1427e-01,
+                    2.2906e-01,
+                    3.1427e-01,
+                    3.1427e-01,
+                    3.1427e-01,
+                    3.1427e-01,
+                    3.1427e-01,
+                    3.1427e-01,
+                    2.2906e-01,
+                    3.1427e-01,
+                    1.3492e00,
+                    1.3395e00,
+                    2.2235e-01,
+                    3.6863e-02,
+                    3.6870e-02,
+                    1.1427e-01,
+                    1.1470e-01,
+                    1.7390e-01,
+                    1.7464e-01,
+                    9.0034e-02,
+                    8.7888e-02,
+                    3.8154e-02,
+                    3.7272e-02,
+                    2.4628e-01,
+                    2.4983e-01,
+                    2.2109e-02,
+                    3.4318e-01,
+                    3.4641e-01,
+                    3.4018e-02,
+                    3.5886e-02,
+                    3.1958e-02,
+                    3.9021e-02,
+                    3.9338e-02,
+                    1.3626e-02,
+                    1.4379e-02,
+                    2.6881e-02,
+                    2.7712e-02,
+                    2.2955e-02,
+                    2.3193e-02,
+                    2.1227e-02,
+                    2.1547e-02,
+                    2.1564e-02,
+                    2.2400e-02,
+                    1.4715e-02,
+                    1.8198e-02,
+                    1.8286e-02,
+                    5.7472e00,
+                    1.6219e07,
+                    1.1749e-08,
+                ]
+            ]
         ),
     )
     normalizer_u_bc = UnitTransformer_2(
@@ -142,11 +236,13 @@ def main(config: DictConfig) -> None:
     for subfolder in val_path.iterdir():
         if subfolder.is_dir():
             arteries_log_save = get_arteries_dict()
-            fig_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE_NOISE/" + str(
-                subfolder.name
+            fig_path = (
+                "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE_NOISE/"
+                + str(subfolder.name)
             )
-            rec_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE_NOISE_rec_sol/" + str(
-                subfolder.name
+            rec_path = (
+                "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE_NOISE_rec_sol/"
+                + str(subfolder.name)
             )
             rec_path = Path(rec_path)
 
@@ -249,12 +345,15 @@ def main(config: DictConfig) -> None:
         for key in arteries_log[artery]:
             arteries_log[artery][key] = np.array(arteries_log[artery][key])
 
-    #save arteries log dict 
-    with open("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE/arteries_log.pkl", "wb") as f:
+    # save arteries log dict
+    with open(
+        "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE/arteries_log.pkl",
+        "wb",
+    ) as f:
         pickle.dump(arteries_log, f)
 
     # load arteries log dict
-    #with open("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE/arteries_log.pkl", "rb") as f:
+    # with open("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE/arteries_log.pkl", "rb") as f:
     #    arteries_log = pickle.load(f)
 
     for artery in arteries_log:

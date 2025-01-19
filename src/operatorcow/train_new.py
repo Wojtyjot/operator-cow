@@ -672,13 +672,13 @@ def train_VANO(
             if loss.item() < best_val_metric:
                 best_val_metric = loss.item()
                 best_val_epoch = epoch
-                #print("SAVING MODEL")
+                # print("SAVING MODEL")
                 torch.save(
                     model.state_dict(),
                     os.path.join(model_save_path, model_name),
                 )
-                #print(os.path.join(model_save_path, model_name))
-                #sys.exit()
+                # print(os.path.join(model_save_path, model_name))
+                # sys.exit()
         if epoch % 100 == 0:
 
             validate_epoch_VANO(
