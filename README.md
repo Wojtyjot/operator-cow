@@ -20,8 +20,8 @@ It features scripts for reproduing results described in paper.
 Dependencies are provieded in file requirements.txt
 
   We ran our experiments on Nvidia RTX A6000 Ada GPU
-  To run them, you should have at least 24 GB of Vram avaliable on GPU
-  To run scripts on smaller GPU's loaders need to be changed.
+  To run them, you should have at least 48 GB of VRAM avaliable on GPU
+  To run scripts on smaller GPU's loaders may need to be changed.
 
 ### Data
 
@@ -56,11 +56,6 @@ Moreover, we make our trained models available.
 You can follow the instructions in `outputs/README.md` to download and use them.
 
 ## Repository structure
-
-> [!IMPORTANT]
-> **TEMPLATE TODO**:
-> Provide a quick overview of the main files in the repo for users to understand your code,
-> then delete this note.
 
 Below, we give a description of the main files and directories in this repository.
 
