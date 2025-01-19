@@ -26,7 +26,7 @@ from train_new import train
 from utils import seeding, utils
 from utils.utils import UnitTransformer_2, get_arteries_dict
 import pickle
-from inverse.Find_RCR import find_windkessel, Simulation
+from inverse.Find_RCR import find_windkessel
 
 # from operatorcow.inverse.inverse import optimize_input_test
 
@@ -142,10 +142,10 @@ def main(config: DictConfig) -> None:
     for subfolder in val_path.iterdir():
         if subfolder.is_dir():
             arteries_log_save = get_arteries_dict()
-            fig_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE_NOISE/" + str(
+            fig_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/TEST_WINDKESSEL/" + str(
                 subfolder.name
             )
-            rec_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE_NOISE_rec_sol/" + str(
+            rec_path = "/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/TEST_WINDKESSEL_rec_sol/" + str(
                 subfolder.name
             )
             rec_path = Path(rec_path)
@@ -200,23 +200,40 @@ def main(config: DictConfig) -> None:
 
             # get best cow
             R2, C, Z = find_windkessel(M_COWs.get_best(), 5)
+            with open(d_p + "R2_C_Z.txt", "w") as f:
+                f.write(f"R2: {R2 * 1e-5}\n")
+                f.write(f"C: {C*1e5}\n")
+                f.write(f"Z: {Z *1e-5}\n")
             print("for subfolder: ", subfolder)
             print("R2: ", R2)
             print("C: ", C)
             print("Z: ", Z)
 
-            # running simulation
-            Simulation(
-                project_name="COW",
-                areteries_csv= "placeholder",
-                estimate_windkessel=False,
-                src="placeholder",
-                R1 = Z,
-                R2 = R2,
-                C = C,
-            )
+            ## running simulation
+            #M_COWs.get_best().ROM_simulation(
+            #    csv_path="/home/wssk-ptw/Operator/operator-cow/src/operatorcow/inverse/ROM/ROM_DATA/inverse_network_ROM.csv",
+            #    R2 = R2,
+            #    C = C,
+            #    Z = Z,
+            #)
+            #for cow in M_COWs.COWs:
+            #    cow.set_ROM_mesurement()
+            
+            #M_COWs.solve_inverse(
+            #    max_iters=config.inverse.max_iters,
+            #    eps=config.inverse.eps,
+            #    batch_size=2,
+            #    lambda_mes=config.inverse.lambda_mes,
+            #    lambda_mass=config.inverse.lambda_mass,
+            #    lambda_pressure=config.inverse.lambda_pressure,
+            #    lambda_a0=config.inverse.lambda_a0,
+            #)
 
-            sys.exit()
+            
+
+            
+
+            
             arteries_log = M_COWs.get_validation(arteries_log)
             arteries_log_save = M_COWs.get_validation(arteries_log_save)
             L2 = M_COWs.get_L2()
@@ -227,16 +244,18 @@ def main(config: DictConfig) -> None:
             M_COWs.dump_validation(fig_path, arteries_log_save)
             M_COWs.dump_reconstructed_u_bc_plots(fig_path)
             M_COWs.dump_solutions(rec_path)
-            M_COWs.dump_mesurement_plots(fig_path)
+            #M_COWs.dump_mesurement_plots(fig_path)
+           #M_COWs.get_best().dump_ROM_plots(os.getcwd())
 
             print(f"Validation data: {subfolder}")
             print(L2)
-            # sys.exit()
+
+            
             i += 1
             wandb.log({"rL2": L2})
 
             if i == 30:
-                pass
+                break
 
     tbl_l2 = wandb.Table(columns=["rL2_mean", "rL2_std"])
     L2s = np.array(L2s)
@@ -262,7 +281,7 @@ def main(config: DictConfig) -> None:
             arteries_log[artery][key] = np.array(arteries_log[artery][key])
 
     #save arteries log dict 
-    with open("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/INVERSE/arteries_log.pkl", "wb") as f:
+    with open("/home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/WYNIKI/TEST_WINDKESSEL/arteries_log.pkl", "wb") as f:
         pickle.dump(arteries_log, f)
 
     # load arteries log dict

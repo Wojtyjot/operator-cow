@@ -44,11 +44,14 @@ def main(config: DictConfig) -> None:
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Load the data
-    dataset_train = COWDataset(config.data.path_train)
-    dataset_test = COWDataset(config.data.path_test)
-    #dataset_train = COWDataset_GANO(config.data.path_train)
-    #dataset_test = COWDataset_GANO(config.data.path_test)
+    
+    if True:
+        dataset_train = COWDataset_GANO(config.data.path_train)
+        dataset_test = COWDataset_GANO(config.data.path_test)
+    else:
 
+        dataset_train = COWDataset(config.data.path_train)
+        dataset_test = COWDataset(config.data.path_test)
     torch.manual_seed(config.seed)
     # save normalizer to renormalize data for plotting and evaluation
     # for vano only normalizer_u_bc = normalizer_y 
@@ -139,10 +142,10 @@ def main(config: DictConfig) -> None:
     )
     VANO_model.load_state_dict(torch.load(config.model.VANO_weights_path))
 
-    model.load_state_dict(torch.load(config.model.surrogate_weights_path))
+    #model.load_state_dict(torch.load(config.model.surrogate_weights_path))
     VANO_model.to(device)
     VANO_model.eval()
-    if False:
+    if True:
         VANO_paper_full(
             model=VANO_model,
             device=device,

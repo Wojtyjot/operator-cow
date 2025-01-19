@@ -248,9 +248,9 @@ def compute_beta(r0: float):
     """
     Function computes Eh from empirical relation Olufsen
     """
-    k1 = 2e6
-    k2 = -2253
-    k3 = 86.5e3
+    k1 = 0.3e6
+    k2 = -1350
+    k3 = 43.7e3
     Eh = r0 * (k1 * np.exp(k2 * r0) + k3)
     return 4 / 3 * np.sqrt(np.pi) * Eh
 

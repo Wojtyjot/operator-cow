@@ -13,7 +13,7 @@ import torch.nn as nn
 import wandb
 from data_utils import WeightedLpRelLoss
 from inverse.Find_RCR import find_windkessel
-from inverse.ROM.Simulation import estimate_windkessel_func
+from inverse.ROM.Simulation import estimate_windkessel_func, apply_windkessel
 from inverse.ROM.utils import (
     create_Julia_file,
     create_results_folder,
@@ -113,15 +113,16 @@ class Artery(object):
                 # print(self.u_bc.shape)
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 # ADDED NOISE TO MEASUREMENT
-                noise = torch.normal(0,2.5, self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().shape).to(self.device)
-                self.noise = noise
+               # noise = torch.normal(0,2.5, self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().shape).to(self.device)
+               # self.noise = noise
                 self.mesurement_value = (
                     self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().to(self.device)
-                    + noise #torch.normal(0,2.5, self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().shape).to(self.device) 
+                   # + noise #torch.normal(0,2.5, self.g.ndata["y"][100 * 25 : 100 * 26, 2].squeeze().shape).to(self.device) 
                 )
+                
 
                 self.parameters = [self.u_bc_latent]
-                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze() + noise.cpu() 
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze() #+ noise.cpu() 
                 if cvs:
                     # jeszcze trzeba zrobic a0 z r0
                     self.theta[29:47] = self.r0s
@@ -135,14 +136,14 @@ class Artery(object):
             elif self.root:
                 # ADDED NOISE TO MEASUREMENT
 
-                noise = torch.normal(0,2.5, self.g.ndata["y"][0:100, 2].unsqueeze(-1).shape).to(self.device)
-                self.noise = noise
+                #noise = torch.normal(0,2.5, self.g.ndata["y"][0:100, 2].unsqueeze(-1).shape).to(self.device)
+                #self.noise = noise
                 self.u_bc = (
                     self.g.ndata["y"][0:100, 2]
                     .unsqueeze(-1)
                     .to(self.device)
                     #.requires_grad_(True) 
-                    + noise #torch.normal(0,2.5, self.g.ndata["y"][0:100, 2].unsqueeze(-1).shape).to(self.device) 
+                   # + noise #torch.normal(0,2.5, self.g.ndata["y"][0:100, 2].unsqueeze(-1).shape).to(self.device) 
                
                 ).requires_grad_(True)
                 #print(self.u_bc.shape)
@@ -150,7 +151,7 @@ class Artery(object):
                 #print(torch.normal(0,2.5, self.g.ndata["y"][0:100, 2].squeeze().shape).shape)
                 # u0 = self.u_bc[0].detach().repeat(200, 1).requires_grad_(True)
                 # self.parameters = [u0]
-                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze() + noise.squeeze().cpu()
+                self.u_bc_true = self.g.ndata["y"][:100, 2].squeeze() #+ noise.squeeze().cpu()
                 self.parameters = None
                 if cvs:
                     # jeszcze trzeba zrobic a0 z r0
@@ -390,15 +391,18 @@ class Artery(object):
         """
         Function dumps predicted and true value at mesurement point
         """
+        plt.figure(figsize=(7.48/2, 9.45/2), dpi=300)
         plt.plot((self.mesurement_value).detach().cpu().numpy(), label="Noisy measurement", color="blue", linestyle=":")
         plt.plot((self.mesurement_value - self.noise).detach().cpu().numpy(), label="Ground truth", color="black")
         plt.plot(self.u_mesurement.detach().cpu().numpy(), label="Reconstructed", color="red", linestyle="--")
-        
         plt.grid()
-        plt.title(f"Measurement and predicted velocity {self.name}")
-        plt.ylabel(r"$cm \cdot s^{-1}$")
-        plt.xlabel("Time step")
-        plt.legend()
+        #plt.title(f"Measurement and predicted velocity {self.name}")
+        plt.ylabel(r"$cm \cdot s^{-1}$", fontsize=7)
+        plt.xlabel("Time step", fontsize=7)
+        plt.legend(fontsize=6)
+        plt.xticks(fontsize=7)
+        plt.yticks(fontsize=7)
+       
         plt.savefig(fig_path + f"/comparison_{self.name}_new.png")
         plt.close()
 
@@ -415,6 +419,8 @@ class Artery(object):
         u = np.loadtxt(path)
         u = u[:, 1:] * 100  # transform to cm/s
         self.mesurement_value = torch.from_numpy(u[:, 25]).float().to(self.device)
+        #print(self.mesurement_value.shape)
+        del u 
         self.mesurement = True
 
     def get_u_in_rom(self):
@@ -444,6 +450,20 @@ class Artery(object):
         a = a[:, 1:]
         a = a[:, 0] * 1e4
         return torch.from_numpy(a).float().to(self.device)
+    
+    def get_p_in_rom(self):
+        """
+        Function returns p_in for ROM model
+        """
+        path = (
+            Path(os.getcwd())
+            .joinpath("Inverse_ROM_results")
+            .joinpath(f"{self.name}_P.last")
+        )
+        p = np.loadtxt(path)
+        p = p[:, 1:]
+        p = p[:, 0] * 10
+        return torch.from_numpy(p).float().to(self.device)
 
     def set_u_in(self, u_in: torch.Tensor):
         self.u_in = u_in
@@ -1971,13 +1991,13 @@ class COW(object):
         for artery in self.arteries:
             u_in = artery.get_u_in().detach().cpu().numpy()
             a_in = artery.get_a_in().detach().cpu().numpy()
-            # p_in = artery.get_p_in().detach().cpu().numpy()
+            p_in = artery.get_p_in().detach().cpu().numpy()
             u_in_true = artery.get_true_u_in().detach().cpu().numpy()
             a_in_true = artery.get_true_a_in().detach().cpu().numpy()
-            # p_in_true = artery.get_true_p_in().detach().cpu().numpy()
+            p_in_true = artery.get_true_p_in().detach().cpu().numpy()
             u_in_rom = artery.get_u_in_rom().detach().cpu().numpy()
             a_in_rom = artery.get_a_in_rom().detach().cpu().numpy()
-            # p_in_rom = artery.get_p_in_rom().detach().cpu().numpy()
+            p_in_rom = artery.get_p_in_rom().detach().cpu().numpy()
 
             fig, axs = plt.subplots(2, 2, figsize=(10, 10))
             axs[0, 0].plot(u_in, label="Predicted")
@@ -1994,12 +2014,12 @@ class COW(object):
             axs[0, 1].set_ylabel("cm^2")
             axs[0, 1].set_xlabel("time_step")
             axs[0, 1].legend()
-            # axs[1, 0].plot(p_in, label="Predicted")
-            # axs[1, 0].plot(p_in_true, label="True")
-            # axs[1, 0].plot(p_in_rom, label="ROM")
-            # axs[1, 0].set_title("Pressure")
-            # axs[1, 0].set_ylabel("Baye")
-            # axs[1, 0].set_xlabel("time_step")
+            axs[1, 0].plot(p_in, label="Predicted")
+            axs[1, 0].plot(p_in_true, label="True")
+            axs[1, 0].plot(p_in_rom, label="ROM")
+            axs[1, 0].set_title("Pressure")
+            axs[1, 0].set_ylabel("Baye")
+            axs[1, 0].set_xlabel("time_step")
             axs[1, 0].legend()
             axs[1, 1].plot(a_in * u_in, label="Predicted")
             axs[1, 1].plot(a_in_true * u_in_true, label="True")
@@ -2282,7 +2302,9 @@ class COW(object):
         """
         create_results_folder(project_name="Inverse_ROM")
         self.create_inlet_file(project_name="Inverse_ROM")
-        df = pd.read_csv(csv_path)
+
+        df = apply_windkessel(csv_path, Z, R2, C)
+        #df = pd.read_csv(csv_path)
         #### need to create df that is base for creatig scripts etc
         r0s = self.get_r0s()
         Ls = self.get_Ls()
@@ -2292,7 +2314,8 @@ class COW(object):
         # df["R2"] = R2
         # df["C"] = C
         df["L"] = Ls
-        df = estimate_windkessel_func(df, self.RT.detach().cpu().numpy(), 1050)
+        #df = estimate_windkessel_func(df, self.RT.detach().cpu().numpy(), 1050)
+        #df = apply_windkessel(csv_path, Z, R2, C)
 
         print("Creating simulation script...")
         create_simulation_script(df, project_name="Inverse_ROM")
@@ -2317,10 +2340,10 @@ class COW(object):
                 "AcoA",
                 "L_PcoA",
                 "R_PcoA",
-                "L_ACA_A2",
-                "R_ACA_A2",
-                "L_PCA_P2",
-                "R_PCA_P2",
+                #"L_ACA_A2",
+                #"R_ACA_A2",
+                #"L_PCA_P2",
+                #"R_PCA_P2",
             ]:
                 artery.set_ROM_mesurement()
 
@@ -2333,12 +2356,13 @@ class COW(object):
                 "AcoA",
                 "L_PcoA",
                 "R_PcoA",
-                "L_ACA_A2",
-                "R_ACA_A2",
-                "L_PCA_P2",
-                "R_PCA_P2",
+                #"L_ACA_A2",
+                #"R_ACA_A2",
+                #"L_PCA_P2",
+                #"R_PCA_P2",
             ]:
-                artery.mesurement = False  # moze jakis setter zrobic
+                artery.mesurement = False
+                artery.mesurement_value = None  # moze jakis setter zrobic
 
     def dump_RT(self, path:str):
         """
@@ -2509,8 +2533,21 @@ class Multiple_COWs(object):
         """
         it = 0
         self.initialize_losses()
-        for i in range(int(max_iters / 5)):
+        for i in range(int(max_iters)):
+           
             for batch, idx in self.loader(batch_size):
+                #print(f"batch : {batch}")
+                #print(f"idx : {idx}")
+                
+                if it == int(2 * max_iters/3):
+                    print("purge")
+                    for cow in self.COWs:
+                        cow.purge_ROM_mesurements()
+                        cow.optimizer_full = None
+                        cow.optimizer_non_mes = None
+                        cow.optimizer_mes = None
+                        cow.optimizer_RT = None
+
                 _, _ = self.solve_cows(batch, idx)
 
                 for idx_cow in idx:
@@ -2526,6 +2563,9 @@ class Multiple_COWs(object):
                         self.COWs[idx_cow].optimizer_RT.zero_grad()
 
                     if it < 2:
+                        if self.COWs[idx_cow].optimizer_RT is None:
+                            self.COWs[idx_cow].create_optimizer(self.lr, "RT")
+
                         self.losses[idx_cow] += (
                             lambda_mes * self.COWs[idx_cow].compute_mesurement_loss()
                         )
@@ -2548,7 +2588,7 @@ class Multiple_COWs(object):
                         # print(f"RT = {self.RT}")
                         # print(f"CT = {self.CT}")
 
-                    elif it < 1000 / 5 and it >= 2:
+                    elif it < int(max_iters/3) and it >= 2:
                         if self.COWs[idx_cow].optimizer_mes is None:
                             self.COWs[idx_cow].create_optimizer(self.lr, "MES")
                         self.losses[idx_cow] += (
@@ -2575,7 +2615,8 @@ class Multiple_COWs(object):
                         # self.losses[idx_cow].backward(retain_graph=True)
                         self.COWs[idx_cow].optimizer_mes.step()
 
-                    elif it <= 2000 / 5 and it >= 1000 / 5:
+                    elif it <= int(2 * max_iters/3) and it >= int(max_iters/3):
+                        
                         if self.COWs[idx_cow].optimizer_non_mes is None:
                             self.COWs[idx_cow].create_optimizer(self.lr, "NON_MES")
                         loss_mass, loss_pressure = self.COWs[
@@ -2602,6 +2643,7 @@ class Multiple_COWs(object):
                         self.COWs[idx_cow].optimizer_non_mes.step()
 
                     else:
+                        
                         if self.COWs[idx_cow].optimizer_full is None:
                             self.COWs[idx_cow].create_optimizer(self.lr, "FULL")
                         self.losses[idx_cow] += (
@@ -2632,7 +2674,12 @@ class Multiple_COWs(object):
                                 )
                             # self.losses[idx_cow].backward(retain_graph=True)
                             self.COWs[idx_cow].optimizer_full.step()
+                            if it == 21:
+                                print("after pugrge step")
                         except:
+                            if it == 21:
+                                print("error")
+                                pass
                             pass
                     if it % 10 == 0:
                         # print(f"COW_IDX = {idx_cow} Loss = {self.losses[idx_cow]}")
@@ -2641,9 +2688,16 @@ class Multiple_COWs(object):
                     self.COWs[idx_cow].propagate_RT()
                     self.COWs[idx_cow].update_CT()
                     self.COWs[idx_cow].propagate_CT()
-                    # torch.cuda.empty_cache()
-                    # gc.collect()
+                    torch.cuda.empty_cache()
+                    gc.collect()
+            
             it += 1
+            #print(f"ITERATION = {it}")
+            #if it == 21:
+            #    print("purge")
+                #for cow_x in self.COWs:
+                #    cow_x.purge_ROM_mesurements()
+            
 
         for idx_cow in range(len(self.COWs)):
             self.validation.append(self.COWs[idx_cow].compute_validation_l2_loss(18))
