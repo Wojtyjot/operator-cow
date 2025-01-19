@@ -3,9 +3,6 @@
 # Reconstruction of Cerebral Hemodynamics from Sparse Data Using Neural Operator Transformers 
 ## Overview
 
-> [!IMPORTANT]
-> **TEMPLATE TODO:**
-> Replace the description below with a description of your project, then delete this note.
 
 This is code repository for paper titled "Reconstruction of Cerebral Hemodynamics from Sparse Data Using Neural Operator Transformers"
 It features scripts for reproduing results described in paper. 
