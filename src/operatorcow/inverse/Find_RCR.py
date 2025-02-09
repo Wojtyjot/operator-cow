@@ -15,7 +15,7 @@ def get_fft(Q: np.ndarray, T: np.float64):
     Function computes fft coefficients for fourier series approx
 
     Args:
-        Q (np.ndarray): flow (predicted by PINN)
+        Q (np.ndarray): flow 
         T (np.float64): period
     """
     n = Q.shape[0] - 1
@@ -65,7 +65,7 @@ def dydt(p, t, theta, aa, bb, T):
 
 def compute_norm(x, x_pred):
     """
-    Function computes L2 norm
+    Function computes norm
     """
     return np.sqrt(np.sum((x - x_pred.squeeze()) ** 2)) / np.sqrt(np.sum(x**2))
 

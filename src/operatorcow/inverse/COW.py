@@ -2905,7 +2905,7 @@ class Multiple_COWs(object):
 
     def dump_RT(self, path: str, best: bool = True):
         """
-        Dumps the RT (Retention Time) data to the specified path.
+        Dumps the RT  data to the specified path.
 
         Parameters:
         path (str): The directory path where the RT data will be saved.
@@ -2938,7 +2938,7 @@ class Multiple_COWs(object):
 
     def get_best(self):
         """
-        Retrieve the best COW (Continuous Wavelet Transform) instance.
+        Retrieve the best COW  instance.
 
         This method returns the COW instance that has been identified as the best
         based on some criteria, which is indicated by the `best_idx` attribute.
