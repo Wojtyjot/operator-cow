@@ -1,6 +1,6 @@
 # Instructions for the data
 
-## [TEMPLATE] Where and how to set up the data
+
 
 Here we provide model checkpoints used in manuscript and additional data needed for network topography.
 One need to change config files to provide appropriate data path.
