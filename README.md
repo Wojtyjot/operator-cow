@@ -104,7 +104,6 @@ Below, we give a description of the main files and directories in this repositor
         │   └── optimizer.py       # Optimization utilities
         └── utils/                  # Utility functions
             ├── Create_GNOT_plots.py  # Plotting utilities for GNOT
-            ├── Inverse_full.py     # Inverse problem utilities
             ├── Inverse_sweep.py    # Parameter sweep utilities
             ├── Multi_Windkessel.py # Inverse reconstruction with Windkessel estimation
             ├── Multi_inverse.py    # Inverse reconstruction
