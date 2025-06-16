@@ -23,10 +23,6 @@ Dependencies are provieded in file requirements.txt
   To run them, you should have at least 48 GB of VRAM avaliable on GPU and 128 GB of RAM.
   To run scripts on smaller GPU's loaders and batching may need to be changed.
 
-### Data
-
-Data for reproducing validation results will be meade avaliable on mendeley upon publication of manuscript.
-Training and testing datasets will be made avaliable upon resonable request as they are too large to upload directly to mendely
 
 ### Logging and tracking experiments
 
