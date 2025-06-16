@@ -12,6 +12,16 @@ from torch.nn.utils.rnn import pad_sequence
 from utils.utils import MultipleTensors
 
 
+class WaveAct(nn.Module):
+    def __init__(self):
+        super(WaveAct, self).__init__()
+        self.w1 = nn.Parameter(torch.ones(1), requires_grad=True)
+        self.w2 = nn.Parameter(torch.ones(1), requires_grad=True)
+
+    def forward(self, x):
+        return self.w1 * torch.sin(x) + self.w2 * torch.cos(x)
+
+
 class MoEGPTConfig:
     """base GPT config, params common to all GPT versions"""
 
@@ -95,6 +105,12 @@ class LinearAttention(nn.Module):
             k = k.softmax(dim=-1)  #
             k_cumsum = k.sum(dim=-2, keepdim=True)
             D_inv = 1.0 / (q * k_cumsum).sum(dim=-1, keepdim=True)  # normalized
+
+            #print(f"q_shape: {q.shape}")
+            #print(f"k_shape: {k.shape}")
+            #print(f"v_shape: {v.shape}")
+            #print(f"D_inv_shape: {D_inv.shape}")
+            
         elif self.attn_type == "galerkin":
             q = q.softmax(dim=-1)
             k = k.softmax(dim=-1)  #
@@ -227,6 +243,8 @@ class MIOECrossAttentionBlock(nn.Module):
             self.act = ReLU
         elif config.act == "sigmoid":
             self.act = Sigmoid
+        elif config.act == "wave":
+            self.act = WaveAct
 
         self.resid_drop1 = nn.Dropout(config.resid_pdrop)
         self.resid_drop2 = nn.Dropout(config.resid_pdrop)

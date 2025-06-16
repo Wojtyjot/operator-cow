@@ -24,8 +24,8 @@ wandb:
     - development
 
 data:
-  path_train: /data/path/placeholder
-  path_test: /data/path/placeholder
+  path_train: /home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/GNOT_train_BIG_DATASET.npy
+  path_test: /home/wssk-ptw/Operator/COW_DATASET_WRO_1_PI/GNOT_test_BIG_DATASET.npy
   batch_size: 32
 
 
@@ -33,7 +33,7 @@ model:
   name: GNOT
   n_layers: 3
   n_hidden: 96
-  n_head: 4
+  n_head: 8
   n_experts: 4
   n_inner: 4
   mlp_layers: 4
@@ -44,7 +44,7 @@ model:
   horiz_fourier_dim: 0
 
 training:
-  epochs: 500
+  epochs: 100
   grad_clip: 1000.0
 
 
