@@ -1,10 +1,10 @@
 
 
-# Reconstruction of Cerebral Hemodynamics from Sparse Data Using Neural Operator Transformers 
+# Reconstructing cerebral hemodynamics from sparse data using Neural Operator Transformers 
 ## Overview
 
 
-This is code repository for paper titled "Reconstruction of Cerebral Hemodynamics from Sparse Data Using Neural Operator Transformers"
+This is code repository for paper titled "Reconstructing cerebral hemodynamics from sparse data using Neural Operator Transformers"
 It features scripts for reproduing results described in paper. 
 
 
@@ -19,8 +19,8 @@ It features scripts for reproduing results described in paper.
 
 Dependencies are provieded in file requirements.txt
 
-  We ran our experiments on Nvidia RTX A6000 Ada GPU
-  To run them, you should have at least 48 GB of VRAM avaliable on GPU
+  We ran our experiments on Nvidia RTX A6000 Ada GPU.
+  To run them, you should have at least 48 GB of VRAM avaliable on GPU and 128 GB of RAM.
   To run scripts on smaller GPU's loaders and batching may need to be changed.
 
 ### Data
@@ -112,4 +112,3 @@ Below, we give a description of the main files and directories in this repositor
             └── train_new.py       # Updated training utilities
 ```
 
-### Installation
