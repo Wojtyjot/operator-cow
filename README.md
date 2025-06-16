@@ -37,6 +37,17 @@ Otherwise, the runs will be anonymous (you don't need to be logged in).
 
 ## Reproduction and Experimentation
 
+## Dataset links
+Datasets can be found on Zenodo under following links:
+
+
+Training: to be uploded
+
+Testing & validation: to be uploaded
+
+
+Datasets will be uploaded shortly after publication
+
 ### Reproducing our results
 To reproduce our results use model checkpoints provided in `data/checkpoints/` direcotry.
 Edit data paths in scripts stored in the `configs/` directory.
@@ -112,3 +123,6 @@ Below, we give a description of the main files and directories in this repositor
             └── train_new.py       # Updated training utilities
 ```
 
+## Citation
+
+If you find following repository usefull please cite:
