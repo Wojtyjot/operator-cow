@@ -920,12 +920,7 @@ def train_batch_VAE(
 
     u_bc, condition = u_bc.to(device), condition.to(device)
     mean, log_var, z, pred = model(u_bc, condition)
-    # ELBO = E_p(eps)[log p(x | z=g(eps, x))] - KL(q(z | x) || p(z))
-    # ----------------------------------------------------------------
-    # Reconstruction loss: E_Q(z|x)[1/2 ||D(z)||^2_L2 - <D(z), u>^~]
-    # Sample S values of z
-    #  condition = [bs, 11]
-
+    
     eps = torch.randn(*z.shape, device=z.device)
     z_samples = mean.unsqueeze(0) + torch.exp(log_var / 2).unsqueeze(0) * eps
 
@@ -937,11 +932,6 @@ def train_batch_VAE(
 
     pred = pred.view(-1, pred.shape[-1])  # [S, batch, 100]
 
-    # u_bc = u_bc.repeat(S, 1, 1)  # [S, batch, 100]
-
-    # D_z_norm = 0.5 * pred.pow(2)  # [S, batch, 100]
-
-    # inner_prod = pred * u_bc  # [S, batch, 100]
 
     reconstr_loss = 0.5 * torch.nn.MSELoss()(pred, u_bc.view(-1, u_bc.shape[-1])).sum(
         dim=-1

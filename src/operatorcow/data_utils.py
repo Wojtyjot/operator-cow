@@ -950,3 +950,144 @@ def calculate_gradient_penalty(
     gradients = gradients.reshape(gradients.size(0), -1)
     gradient_penalty = torch.mean((gradients.norm(2, dim=1) - 1.0 / 100) ** 2)
     return gradient_penalty
+
+
+
+class COWDataset_res(DGLDataset):
+    """
+    Class for loading and handling dataset comprised of solutions to 1DROM
+
+    blood flow equations with varying prameters. The dataset is stored in a
+    .npy file in format [[X, Y, theta, (in_funcs)]]
+    """
+
+    def __init__(
+        self,
+        data_path: str,
+        normalize_x: bool = True,
+        normalize_y: bool = True,
+        name: str = "COWDataset_res",
+        Nx_low: int = 25,
+        Nt_low: int = 50,
+    ):
+        self.Nx = 50
+        self.Nt = 100
+        self.data_path = data_path
+        self.normalize_x = normalize_x
+        self.normalize_y = normalize_y
+        self.Nx_low = Nx_low
+        self.Nt_low = Nt_low
+
+        if not os.path.exists(data_path):
+            raise FileNotFoundError(f"Data file {data_path} not found")
+        else:
+            self.data = np.load(data_path, allow_pickle=True)
+
+        super(COWDataset_res, self).__init__(name)
+
+    def process(self):
+
+        self.data_len = len(self.data)
+        self.graphs = list()
+        self.inputs_f = list()
+        self.u_p = list()  # theta, global parameters
+        for i in range(len(self)):
+            x, y, u_p, input_f = self.data[i]
+            x, y, input_f = self.__subsample(x, y, input_f, self.Nx_low, self.Nt_low)
+            in_BC, p0, u0, a0, A_BC, p_BC, p_out_BC, A_out = input_f
+            input_f = (in_BC, a0)
+            g = dgl.DGLGraph()
+            g.add_nodes(x.shape[0])
+            g.ndata["x"] = torch.from_numpy(x).float()
+            g.ndata["y"] = torch.from_numpy(y).float()
+            up = torch.from_numpy(u_p).float()
+            self.graphs.append(g)
+            self.u_p.append(up)
+            input_f = MultipleTensors([torch.from_numpy(f).float() for f in input_f])
+            self.inputs_f.append(input_f)
+            self.num_inputs = len(input_f)
+
+        self.u_p = torch.stack(self.u_p)
+
+        if self.normalize_y:
+            self.__normalize_y()
+        if self.normalize_x:
+            self.__normalize_x()
+
+        self.__update_dataset_config()
+
+        return
+    
+    def __subsample(self, x, y, input_f, Nx_low, Nt_low):
+        #print("Subsampling data")
+        step_x = self.Nx // Nx_low
+        step_t = self.Nt // Nt_low
+
+        d_X = x.shape[1]
+        d_Y = y.shape[1]
+
+        X_grid = x.reshape(self.Nx, self.Nt, d_X)
+        Y_grid = y.reshape(self.Nx, self.Nt, d_Y)
+
+        X_sub_grid = X_grid[::step_x, ::step_t, :]
+        Y_sub_grid = Y_grid[::step_x, ::step_t, :]
+
+        X_sub = X_sub_grid.reshape(-1, d_X)
+        Y_sub = Y_sub_grid.reshape(-1, d_Y)
+
+        #print(x.shape, y.shape)
+
+        #print(X_sub.shape, Y_sub.shape)
+        #sys.exit()
+
+        in_funcs_sub = []
+
+        for f in input_f:
+            if f.ndim >= 1:
+                if f.shape[0] == self.Nt:
+                    f_sub = f[::step_t, :]
+                elif f.shape[0] == self.Nx:
+                    f_sub = f[::step_x, :]
+                else:
+                    f_sub = f
+            else:
+                f_sub = f
+            
+            in_funcs_sub.append(f_sub)
+        
+        return X_sub, Y_sub, tuple(in_funcs_sub)
+    
+
+
+    def __normalize_y(self):
+        print("Normalizing target features")
+        y_feats_all = torch.cat([g.ndata["y"] for g in self.graphs], dim=0)
+        self.y_normalizer = UnitTransformer(y_feats_all)
+        for g in self.graphs:
+            g.ndata["y"] = self.y_normalizer.transform(g.ndata["y"], inverse=False)
+        print("Target features are normalized using unit transformer")
+
+    def __normalize_x(self):
+        print("Normalizing input features")
+        x_feats_all = torch.cat([g.ndata["x"] for g in self.graphs], dim=0)
+        self.x_normalizer = UnitTransformer(x_feats_all)
+        for g in self.graphs:
+            g.ndata["x"] = self.x_normalizer.transform(g.ndata["x"], inverse=False)
+        self.up_normalizer = UnitTransformer(self.u_p)
+        self.u_p = self.up_normalizer.transform(self.u_p, inverse=False)
+        print("Input features are normalized using unit transformer")
+
+    def __update_dataset_config(self):
+        self.config = {
+            "input_dim": self.graphs[0].ndata["x"].shape[1],
+            "theta_dim": self.u_p.shape[1],
+            "output_dim": self.graphs[0].ndata["y"].shape[1],
+            "branch_sizes": [x.shape[1] for x in self.inputs_f[0]],
+        }
+        return
+
+    def __len__(self):
+        return self.data_len
+
+    def __getitem__(self, idx):
+        return self.graphs[idx], self.u_p[idx], self.inputs_f[idx]

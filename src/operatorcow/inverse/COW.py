@@ -2566,24 +2566,32 @@ class Multiple_COWs(object):
 
             return out, idx
         else:
-            g, u_p, g_u = batch
+            g, u_p, g_u = batch  # znormalizowac trzeba to
+            g, u_p, g_u = (
+                    g.to(self.device),
+                    u_p.to(self.device),
+                    g_u.to(self.device),
+                )
 
-            u_p, g_u = (
-                u_p.to(self.device),
-                g_u.to(self.device),
-            )
-
+            g.ndata["x"] = self.normalizer_x.transform(g.ndata["x"], inverse=False)
             u_p = self.normalizer_theta.transform(u_p, inverse=False)
 
-            out = self.model_surrogate(self.g, u_p, g_u)
-            out = self.normalizer_y.transform(out, inverse=True)
-            out = out.reshape(batch_size, 18, -1, 3)
+            
 
+            out = self.model_surrogate(
+                g, u_p, g_u
+            )  
+            out = self.normalizer_y.transform(out, inverse=True)
+            #raise Warning("Function assumes batch_size 18, check if it is correct")
+            out = out.reshape(batch_size, 18, -1, 3) # HARDCODED BATCH SIZE 18
+
+          
             for idx_out, idx_cow in enumerate(idx):
                 self.COWs[idx_cow].update_arteries(
                     out[idx_out].squeeze(), list(range(18))
                 )
             return out, idx
+
 
     def solve_inverse(
         self,
