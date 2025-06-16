@@ -126,3 +126,13 @@ Below, we give a description of the main files and directories in this repositor
 ## Citation
 
 If you find following repository usefull please cite:
+
+surrogate model is based on GNOT:
+```
+@article{hao2023gnot,
+  title={GNOT: A General Neural Operator Transformer for Operator Learning},
+  author={Hao, Zhongkai and Ying, Chengyang and Wang, Zhengyi and Su, Hang and Dong, Yinpeng and Liu, Songming and Cheng, Ze and Zhu, Jun and Song, Jian},
+  journal={arXiv preprint arXiv:2302.14376},
+  year={2023}
+}
+```
