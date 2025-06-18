@@ -122,6 +122,21 @@ Below, we give a description of the main files and directories in this repositor
 
 If you find following repository usefull please cite:
 
+```
+@article{KACZMAREK2025110492,
+title = {Reconstructing cerebral hemodynamics from sparse data using Neural Operator Transformers},
+journal = {Computers in Biology and Medicine},
+volume = {195},
+pages = {110492},
+year = {2025},
+issn = {0010-4825},
+doi = {https://doi.org/10.1016/j.compbiomed.2025.110492},
+url = {https://www.sciencedirect.com/science/article/pii/S0010482525008431},
+author = {Wojciech Kaczmarek and Jakub {Magdziarz Ibrahim-El-Nur} and Magdalena Łoś and Tomasz Roleder}
+}
+```
+
+
 surrogate model is based on GNOT:
 ```
 @article{hao2023gnot,
