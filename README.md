@@ -37,12 +37,10 @@ Otherwise, the runs will be anonymous (you don't need to be logged in).
 Datasets can be found on Zenodo under following links:
 
 
-Training: to be uploded
+Training: https://zenodo.org/records/17325257
 
-Testing & validation: to be uploaded
+Testing & validation: https://zenodo.org/records/17326502
 
-
-Datasets will be uploaded shortly after publication
 
 ### Reproducing our results
 To reproduce our results use model checkpoints provided in `data/checkpoints/` direcotry.
